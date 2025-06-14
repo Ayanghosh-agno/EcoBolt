@@ -10,13 +10,13 @@ import {
   AlertCircle,
   CheckCircle,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Zap
 } from 'lucide-react';
 import { SensorData } from '../../types';
-import { api } from '../../services/api';
+import { watsonxApi } from '../../services/watsonxApi';
 
 interface AIRecommendation {
-  id: string;
   type: 'practice' | 'fertilizer' | 'crop' | 'insight';
   title: string;
   description: string;
@@ -34,15 +34,71 @@ const AIRecommendations: React.FC<AIRecommendationsProps> = ({ sensorData }) => 
   const [recommendations, setRecommendations] = useState<AIRecommendation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const [isConfigured, setIsConfigured] = useState(false);
+  const [configStatus, setConfigStatus] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const generateRecommendations = async (data: SensorData): Promise<AIRecommendation[]> => {
-    // Simulate WatsonX AI analysis based on sensor data
+  useEffect(() => {
+    // Check WatsonX configuration on component mount
+    const configured = watsonxApi.isConfigured();
+    const status = watsonxApi.getConfigStatus();
+    
+    setIsConfigured(configured);
+    setConfigStatus(status);
+    
+    console.log('🤖 AIRecommendations: WatsonX configuration:', status);
+  }, []);
+
+  const fetchRecommendations = async (isManualRefresh = false) => {
+    if (!sensorData) {
+      console.log('🤖 AIRecommendations: No sensor data available');
+      setLoading(false);
+      return;
+    }
+    
+    try {
+      setError(null);
+      
+      if (isManualRefresh) {
+        setRefreshing(true);
+      }
+      
+      console.log('🤖 AIRecommendations: Fetching AI recommendations...');
+      
+      if (isConfigured) {
+        // Use real WatsonX API
+        const recs = await watsonxApi.getRecommendations(sensorData);
+        setRecommendations(recs);
+        console.log(`✅ AIRecommendations: Received ${recs.length} recommendations from WatsonX`);
+      } else {
+        // Use fallback recommendations
+        console.log('⚠️ AIRecommendations: WatsonX not configured, using fallback recommendations');
+        const fallbackRecs = generateFallbackRecommendations(sensorData);
+        setRecommendations(fallbackRecs);
+      }
+      
+      setHasLoadedOnce(true);
+    } catch (error) {
+      console.error('❌ AIRecommendations: Error fetching recommendations:', error);
+      setError('Failed to generate AI recommendations');
+      
+      // Use fallback recommendations on error
+      const fallbackRecs = generateFallbackRecommendations(sensorData);
+      setRecommendations(fallbackRecs);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  // Generate fallback recommendations when WatsonX is not available
+  const generateFallbackRecommendations = (data: SensorData): AIRecommendation[] => {
     const recs: AIRecommendation[] = [];
 
     // Best Farming Practice Recommendation
     if (data.moisture < 40) {
       recs.push({
-        id: 'practice-1',
         type: 'practice',
         title: 'Implement Drip Irrigation',
         description: 'Current soil moisture is below optimal levels. Drip irrigation can improve water efficiency by 30-50%.',
@@ -55,7 +111,6 @@ const AIRecommendations: React.FC<AIRecommendationsProps> = ({ sensorData }) => 
 
     if (data.ph < 6.0 || data.ph > 7.5) {
       recs.push({
-        id: 'practice-2',
         type: 'practice',
         title: 'Soil pH Adjustment',
         description: data.ph < 6.0 ? 'Apply lime to increase soil pH' : 'Apply sulfur to decrease soil pH',
@@ -69,7 +124,6 @@ const AIRecommendations: React.FC<AIRecommendationsProps> = ({ sensorData }) => 
     // Best Fertilizer Recommendation
     if (data.n < 30) {
       recs.push({
-        id: 'fertilizer-1',
         type: 'fertilizer',
         title: 'Nitrogen-Rich Fertilizer',
         description: 'Apply 20-10-10 NPK fertilizer at 150kg/hectare to boost nitrogen levels.',
@@ -82,7 +136,6 @@ const AIRecommendations: React.FC<AIRecommendationsProps> = ({ sensorData }) => 
 
     if (data.p < 15) {
       recs.push({
-        id: 'fertilizer-2',
         type: 'fertilizer',
         title: 'Phosphorus Supplement',
         description: 'Consider bone meal or rock phosphate application to improve phosphorus availability.',
@@ -99,7 +152,6 @@ const AIRecommendations: React.FC<AIRecommendationsProps> = ({ sensorData }) => 
     
     if (tempRange >= 20 && tempRange <= 30 && moistureLevel >= 40) {
       recs.push({
-        id: 'crop-1',
         type: 'crop',
         title: 'Tomatoes - Optimal Conditions',
         description: 'Current conditions are ideal for tomato cultivation. Expected yield: 40-60 tons/hectare.',
@@ -110,7 +162,6 @@ const AIRecommendations: React.FC<AIRecommendationsProps> = ({ sensorData }) => 
       });
     } else if (tempRange >= 15 && tempRange <= 25) {
       recs.push({
-        id: 'crop-2',
         type: 'crop',
         title: 'Lettuce - Good Match',
         description: 'Cool-season crop suitable for current temperature conditions. Consider succession planting.',
@@ -125,7 +176,6 @@ const AIRecommendations: React.FC<AIRecommendationsProps> = ({ sensorData }) => 
     const lightLevel = data.light;
     if (lightLevel < 300) {
       recs.push({
-        id: 'insight-1',
         type: 'insight',
         title: 'Light Supplementation Needed',
         description: 'Consider LED grow lights during cloudy periods to maintain photosynthesis rates.',
@@ -138,7 +188,6 @@ const AIRecommendations: React.FC<AIRecommendationsProps> = ({ sensorData }) => 
 
     if (data.ec > 2.5) {
       recs.push({
-        id: 'insight-2',
         type: 'insight',
         title: 'Salt Stress Warning',
         description: 'High electrical conductivity indicates salt buildup. Flush soil with clean water.',
@@ -152,32 +201,22 @@ const AIRecommendations: React.FC<AIRecommendationsProps> = ({ sensorData }) => 
     return recs;
   };
 
-  const fetchRecommendations = async () => {
-    if (!sensorData) return;
-    
-    try {
-      // Simulate API call to WatsonX
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      const recs = await generateRecommendations(sensorData);
-      setRecommendations(recs);
-    } catch (error) {
-      console.error('Error fetching AI recommendations:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
-
   useEffect(() => {
-    if (sensorData) {
+    // Only fetch recommendations on first load (first login)
+    if (sensorData && !hasLoadedOnce) {
+      console.log('🤖 AIRecommendations: First load, fetching recommendations...');
       setLoading(true);
       fetchRecommendations();
+    } else if (sensorData && hasLoadedOnce) {
+      console.log('🤖 AIRecommendations: Subsequent load, skipping automatic fetch');
+      setLoading(false);
     }
-  }, [sensorData]);
+  }, [sensorData, hasLoadedOnce]);
 
   const handleRefresh = () => {
+    console.log('🔄 AIRecommendations: Manual refresh triggered');
     setRefreshing(true);
-    fetchRecommendations();
+    fetchRecommendations(true);
   };
 
   const getTypeIcon = (type: string) => {
@@ -235,7 +274,9 @@ const AIRecommendations: React.FC<AIRecommendationsProps> = ({ sensorData }) => 
               <div className="absolute inset-0 h-10 w-10 sm:h-12 sm:w-12 border-4 border-indigo-200 rounded-full mx-auto animate-pulse"></div>
             </div>
             <p className="text-gray-600 font-medium text-sm sm:text-base">Analyzing sensor data...</p>
-            <p className="text-gray-500 text-xs sm:text-sm mt-1">Generating AI-powered insights</p>
+            <p className="text-gray-500 text-xs sm:text-sm mt-1">
+              {isConfigured ? 'Generating AI-powered insights with WatsonX' : 'Generating insights with fallback system'}
+            </p>
           </div>
         </div>
       </div>
@@ -251,7 +292,19 @@ const AIRecommendations: React.FC<AIRecommendationsProps> = ({ sensorData }) => 
           </div>
           <div>
             <h2 className="text-base sm:text-lg font-semibold text-gray-900">WatsonX AI Recommendations</h2>
-            <p className="text-gray-600 text-xs sm:text-sm">AI-powered farming insights based on real-time data</p>
+            <div className="flex items-center space-x-2 mt-1">
+              {isConfigured ? (
+                <>
+                  <Zap className="h-3 w-3 text-indigo-500" />
+                  <span className="text-xs text-indigo-600 font-medium">WatsonX AI Powered</span>
+                </>
+              ) : (
+                <>
+                  <AlertCircle className="h-3 w-3 text-yellow-500" />
+                  <span className="text-xs text-yellow-600 font-medium">Fallback Mode</span>
+                </>
+              )}
+            </div>
           </div>
         </div>
         
@@ -265,6 +318,26 @@ const AIRecommendations: React.FC<AIRecommendationsProps> = ({ sensorData }) => 
         </button>
       </div>
 
+      {/* Configuration Warning */}
+      {!isConfigured && (
+        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <div className="flex items-center mb-2">
+            <AlertCircle className="h-4 w-4 text-yellow-600 mr-2" />
+            <span className="text-sm font-medium text-yellow-800">WatsonX AI Not Configured</span>
+          </div>
+          <div className="text-xs text-yellow-700">
+            Using fallback recommendation system. Configure WatsonX API key and project ID for enhanced AI insights.
+          </div>
+        </div>
+      )}
+
+      {/* Error Message */}
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-red-600 text-sm">{error}</p>
+        </div>
+      )}
+
       {recommendations.length === 0 ? (
         <div className="text-center py-6 sm:py-8">
           <Sparkles className="h-8 w-8 sm:h-10 sm:w-10 text-gray-400 mx-auto mb-3" />
@@ -273,11 +346,11 @@ const AIRecommendations: React.FC<AIRecommendationsProps> = ({ sensorData }) => 
         </div>
       ) : (
         <div className="space-y-3 sm:space-y-4">
-          {recommendations.map((rec) => {
+          {recommendations.map((rec, index) => {
             const TypeIcon = getTypeIcon(rec.type);
             return (
               <div
-                key={rec.id}
+                key={`${rec.type}-${index}`}
                 className={`border-2 rounded-lg sm:rounded-xl p-3 sm:p-4 transition-all duration-200 hover:shadow-md ${getPriorityColor(rec.priority)}`}
               >
                 <div className="flex items-start space-x-3 sm:space-x-4">
@@ -318,8 +391,17 @@ const AIRecommendations: React.FC<AIRecommendationsProps> = ({ sensorData }) => 
                       </div>
                       
                       <div className="flex items-center space-x-1">
-                        <TrendingUp className="h-3 w-3 text-indigo-500" />
-                        <span className="text-xs text-indigo-600 font-medium">AI Powered</span>
+                        {isConfigured ? (
+                          <>
+                            <Zap className="h-3 w-3 text-indigo-500" />
+                            <span className="text-xs text-indigo-600 font-medium">WatsonX AI</span>
+                          </>
+                        ) : (
+                          <>
+                            <TrendingUp className="h-3 w-3 text-yellow-500" />
+                            <span className="text-xs text-yellow-600 font-medium">Fallback AI</span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -333,10 +415,14 @@ const AIRecommendations: React.FC<AIRecommendationsProps> = ({ sensorData }) => 
       <div className="mt-4 sm:mt-6 pt-3 sm:pt-4 border-t border-gray-200">
         <div className="flex items-center justify-between text-xs text-gray-500">
           <div className="flex items-center space-x-2">
-            <div className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse"></div>
-            <span>Powered by IBM WatsonX AI</span>
+            <div className={`w-2 h-2 rounded-full ${isConfigured ? 'bg-indigo-400 animate-pulse' : 'bg-yellow-400'}`}></div>
+            <span>
+              {isConfigured ? 'Powered by IBM WatsonX AI' : 'Fallback recommendation system'}
+            </span>
           </div>
-          <span>Updated with latest sensor data</span>
+          <span>
+            {hasLoadedOnce ? 'Click refresh for new insights' : 'Auto-generated on first load'}
+          </span>
         </div>
       </div>
     </div>
