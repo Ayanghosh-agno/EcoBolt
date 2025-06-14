@@ -5,7 +5,6 @@ import Login from './components/Login/Login';
 import Dashboard from './components/Dashboard/Dashboard';
 import Analytics from './components/Analytics/Analytics';
 import Settings from './components/Settings/Settings';
-import DeviceManagement from './components/DeviceManagement/DeviceManagement';
 import Layout from './components/Layout/Layout';
 
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -73,7 +72,6 @@ const App: React.FC = () => {
           >
             <Route index element={<Dashboard />} />
             <Route path="analytics" element={<Analytics />} />
-            <Route path="devices" element={<DeviceManagement />} />
             <Route path="settings" element={<Settings />} />
           </Route>
         </Routes>

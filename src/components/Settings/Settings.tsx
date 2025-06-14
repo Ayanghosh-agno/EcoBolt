@@ -11,7 +11,16 @@ import {
   AlertTriangle,
   CheckCircle,
   Smartphone,
-  RefreshCw
+  RefreshCw,
+  Plus,
+  MapPin,
+  Calendar,
+  Wifi,
+  WifiOff,
+  Edit3,
+  Trash2,
+  Key,
+  Lock
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { supabaseApi } from '../../services/supabaseApi';
@@ -31,11 +40,16 @@ interface Device {
   id: string;
   device_id: string;
   device_name: string;
+  location: string | null;
+  is_active: boolean;
+  last_seen: string | null;
+  api_key: string;
+  created_at: string;
 }
 
 const Settings: React.FC = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'profile' | 'thresholds'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'devices' | 'thresholds'>('profile');
   
   // Profile state
   const [formData, setFormData] = useState({
@@ -46,8 +60,19 @@ const Settings: React.FC = () => {
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState(false);
   
-  // Thresholds state
+  // Device state
   const [devices, setDevices] = useState<Device[]>([]);
+  const [devicesLoading, setDevicesLoading] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingDevice, setEditingDevice] = useState<Device | null>(null);
+  const [deviceFormData, setDeviceFormData] = useState({
+    device_id: '',
+    device_name: '',
+    location: '',
+  });
+  const [deviceSubmitting, setDeviceSubmitting] = useState(false);
+  
+  // Thresholds state
   const [selectedDevice, setSelectedDevice] = useState<string>('');
   const [thresholds, setThresholds] = useState<Threshold[]>([]);
   const [thresholdsLoading, setThresholdsLoading] = useState(false);
@@ -69,6 +94,20 @@ const Settings: React.FC = () => {
     { key: 'potassium', label: 'Potassium (K)', unit: 'ppm', defaultMin: 15, defaultMax: 40 },
   ];
 
+  // Default threshold values for sensor parameters
+  const defaultThresholds = [
+    { parameter: 'atmo_temp', min_value: 15.0, max_value: 35.0 },
+    { parameter: 'humidity', min_value: 40.0, max_value: 80.0 },
+    { parameter: 'moisture', min_value: 30.0, max_value: 70.0 },
+    { parameter: 'ph', min_value: 6.0, max_value: 7.5 },
+    { parameter: 'ec', min_value: 0.5, max_value: 2.0 },
+    { parameter: 'soil_temp', min_value: 18.0, max_value: 30.0 },
+    { parameter: 'nitrogen', min_value: 20.0, max_value: 50.0 },
+    { parameter: 'phosphorus', min_value: 15.0, max_value: 25.0 },
+    { parameter: 'potassium', min_value: 15.0, max_value: 40.0 },
+    { parameter: 'light', min_value: 300.0, max_value: 800.0 },
+  ];
+
   useEffect(() => {
     fetchDevices();
   }, []);
@@ -82,15 +121,18 @@ const Settings: React.FC = () => {
   const fetchDevices = async () => {
     try {
       console.log('🔍 Settings: Fetching devices...');
+      setDevicesLoading(true);
       const deviceData = await supabaseApi.getUserDevices();
       console.log('✅ Settings: Devices fetched:', deviceData.length);
       setDevices(deviceData);
-      if (deviceData.length > 0) {
+      if (deviceData.length > 0 && !selectedDevice) {
         setSelectedDevice(deviceData[0].device_id);
       }
     } catch (error) {
       console.error('❌ Settings: Error fetching devices:', error);
       setError('Failed to load devices');
+    } finally {
+      setDevicesLoading(false);
     }
   };
 
@@ -138,6 +180,132 @@ const Settings: React.FC = () => {
     });
   };
 
+  // Device management functions
+  const createDefaultThresholds = async (deviceId: string) => {
+    try {
+      // Create default thresholds for all sensor parameters
+      for (const threshold of defaultThresholds) {
+        await supabaseApi.updateThreshold(
+          deviceId,
+          threshold.parameter,
+          threshold.min_value,
+          threshold.max_value
+        );
+      }
+      console.log(`Created default thresholds for device: ${deviceId}`);
+    } catch (error) {
+      console.error('Error creating default thresholds:', error);
+      // Don't throw error here as device creation was successful
+      // Just log the error for debugging
+    }
+  };
+
+  const handleDeviceSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDeviceSubmitting(true);
+    setError('');
+
+    try {
+      if (editingDevice) {
+        await supabaseApi.updateDevice(editingDevice.device_id, {
+          device_name: deviceFormData.device_name,
+          location: deviceFormData.location || null,
+        });
+        setThresholdsSuccess('Device updated successfully');
+      } else {
+        // Check if user already has a device
+        if (devices.length >= 1) {
+          setError('You can only add one device per account');
+          return;
+        }
+
+        // Add new device
+        const newDevice = await supabaseApi.addDevice(
+          deviceFormData.device_id,
+          deviceFormData.device_name,
+          deviceFormData.location || undefined
+        );
+        
+        // Create default thresholds for the new device
+        await createDefaultThresholds(newDevice.device_id);
+        
+        setThresholdsSuccess('Device added successfully with default thresholds');
+      }
+      
+      await fetchDevices();
+      resetDeviceForm();
+    } catch (error: any) {
+      setError(error.message || 'Failed to save device');
+    } finally {
+      setDeviceSubmitting(false);
+    }
+  };
+
+  const handleDeviceDelete = async (deviceId: string) => {
+    if (!confirm('Are you sure you want to delete this device? All associated data will be removed.')) {
+      return;
+    }
+
+    try {
+      await supabaseApi.deleteDevice(deviceId);
+      setThresholdsSuccess('Device deleted successfully');
+      await fetchDevices();
+      if (selectedDevice === deviceId) {
+        setSelectedDevice('');
+      }
+    } catch (error: any) {
+      setError(error.message || 'Failed to delete device');
+    }
+  };
+
+  const resetDeviceForm = () => {
+    setDeviceFormData({ device_id: '', device_name: '', location: '' });
+    setShowAddForm(false);
+    setEditingDevice(null);
+  };
+
+  const startDeviceEdit = (device: Device) => {
+    setEditingDevice(device);
+    setDeviceFormData({
+      device_id: device.device_id,
+      device_name: device.device_name,
+      location: device.location || '',
+    });
+    setShowAddForm(true);
+  };
+
+  const copyApiKey = (apiKey: string) => {
+    navigator.clipboard.writeText(apiKey);
+    setThresholdsSuccess('API key copied to clipboard');
+    setTimeout(() => setThresholdsSuccess(''), 3000);
+  };
+
+  const getDeviceStatus = (device: Device) => {
+    if (!device.last_seen) return 'never';
+    
+    const lastSeen = new Date(device.last_seen);
+    const now = new Date();
+    const diffMinutes = (now.getTime() - lastSeen.getTime()) / (1000 * 60);
+    
+    if (diffMinutes < 5) return 'online';
+    if (diffMinutes < 30) return 'recent';
+    return 'offline';
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'online': return 'text-green-600 bg-green-100';
+      case 'recent': return 'text-yellow-600 bg-yellow-100';
+      case 'offline': return 'text-red-600 bg-red-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    return status === 'online' || status === 'recent' ? Wifi : WifiOff;
+  };
+
+  // Threshold management functions
   const getThresholdValue = (parameter: string, type: 'min' | 'max'): number => {
     const threshold = thresholds.find(t => t.parameter === parameter);
     if (threshold) {
@@ -226,6 +394,9 @@ const Settings: React.FC = () => {
     }
   };
 
+  // Check if user can add more devices (limit: 1)
+  const canAddDevice = devices.length < 1;
+
   return (
     <div className="min-h-screen bg-gray-50 py-4 sm:py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -233,7 +404,7 @@ const Settings: React.FC = () => {
           {/* Header */}
           <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Settings</h1>
-            <p className="text-gray-600 mt-1 text-sm sm:text-base">Manage your account settings and device thresholds</p>
+            <p className="text-gray-600 mt-1 text-sm sm:text-base">Manage your account, devices, and alert thresholds</p>
           </div>
 
           {/* Tab Navigation */}
@@ -250,6 +421,20 @@ const Settings: React.FC = () => {
                 <div className="flex items-center space-x-2">
                   <User className="h-4 w-4" />
                   <span>Profile</span>
+                </div>
+              </button>
+              
+              <button
+                onClick={() => setActiveTab('devices')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 ${
+                  activeTab === 'devices'
+                    ? 'border-emerald-500 text-emerald-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <Smartphone className="h-4 w-4" />
+                  <span>Devices</span>
                 </div>
               </button>
               
@@ -286,6 +471,7 @@ const Settings: React.FC = () => {
 
           {/* Tab Content */}
           <div className="p-4 sm:p-6">
+            {/* Profile Tab */}
             {activeTab === 'profile' && (
               <form onSubmit={handleProfileSubmit} className="space-y-6">
                 <div>
@@ -373,6 +559,259 @@ const Settings: React.FC = () => {
               </form>
             )}
 
+            {/* Devices Tab */}
+            {activeTab === 'devices' && (
+              <div className="space-y-6">
+                {/* Device Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900">Device Management</h3>
+                    <p className="text-gray-600 text-sm">Manage your IoT device and monitor its status</p>
+                  </div>
+                  <button
+                    onClick={() => setShowAddForm(true)}
+                    disabled={!canAddDevice}
+                    className={`flex items-center px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200 ${
+                      canAddDevice
+                        ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    }`}
+                  >
+                    {canAddDevice ? (
+                      <Plus className="h-4 w-4 mr-2" />
+                    ) : (
+                      <Lock className="h-4 w-4 mr-2" />
+                    )}
+                    {canAddDevice ? 'Add Device' : 'Device Limit Reached'}
+                  </button>
+                </div>
+
+                {/* Device Limit Notice */}
+                {!canAddDevice && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-center">
+                      <AlertTriangle className="h-5 w-5 text-blue-500 mr-2" />
+                      <p className="text-blue-700 font-medium">
+                        Device Limit: You can only have one device per account. To add a new device, please delete your existing device first.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Add/Edit Device Form */}
+                {showAddForm && (
+                  <div className="bg-gray-50 rounded-lg p-6 border border-gray-200">
+                    <h4 className="text-lg font-medium text-gray-900 mb-4">
+                      {editingDevice ? 'Edit Device' : 'Add New Device'}
+                    </h4>
+                    
+                    <form onSubmit={handleDeviceSubmit} className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Device ID
+                          </label>
+                          <input
+                            type="text"
+                            value={deviceFormData.device_id}
+                            onChange={(e) => setDeviceFormData({ ...deviceFormData, device_id: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                            placeholder="e.g., ESP32_001"
+                            required
+                            disabled={!!editingDevice}
+                          />
+                          {editingDevice && (
+                            <p className="text-xs text-gray-500 mt-1">Device ID cannot be changed</p>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Device Name
+                          </label>
+                          <input
+                            type="text"
+                            value={deviceFormData.device_name}
+                            onChange={(e) => setDeviceFormData({ ...deviceFormData, device_name: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                            placeholder="e.g., Greenhouse Sensor"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Location (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={deviceFormData.location}
+                          onChange={(e) => setDeviceFormData({ ...deviceFormData, location: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                          placeholder="e.g., Greenhouse A, Field 1"
+                        />
+                      </div>
+
+                      {!editingDevice && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                          <h5 className="text-sm font-medium text-blue-900 mb-2">Default Thresholds</h5>
+                          <p className="text-sm text-blue-700">
+                            The following default thresholds will be automatically created for this device:
+                          </p>
+                          <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-blue-600">
+                            {defaultThresholds.map((threshold) => (
+                              <div key={threshold.parameter}>
+                                <strong>{threshold.parameter}:</strong> {threshold.min_value} - {threshold.max_value}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="flex space-x-3">
+                        <button
+                          type="submit"
+                          disabled={deviceSubmitting}
+                          className="flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 transition-all duration-200"
+                        >
+                          {deviceSubmitting ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <CheckCircle className="h-4 w-4 mr-2" />
+                          )}
+                          {editingDevice ? 'Update Device' : 'Add Device'}
+                        </button>
+                        
+                        <button
+                          type="button"
+                          onClick={resetDeviceForm}
+                          className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {/* Devices List */}
+                {devicesLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-emerald-600 mr-2" />
+                    <span className="text-gray-600">Loading devices...</span>
+                  </div>
+                ) : devices.length === 0 ? (
+                  <div className="text-center py-8 bg-gray-50 rounded-lg border border-gray-200">
+                    <Smartphone className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h4 className="text-lg font-medium text-gray-900 mb-2">No devices found</h4>
+                    <p className="text-gray-600 mb-6">Add your IoT device to start monitoring sensor data</p>
+                    <button
+                      onClick={() => setShowAddForm(true)}
+                      disabled={!canAddDevice}
+                      className={`inline-flex items-center px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200 ${
+                        canAddDevice
+                          ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                          : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      }`}
+                    >
+                      {canAddDevice ? (
+                        <Plus className="h-4 w-4 mr-2" />
+                      ) : (
+                        <Lock className="h-4 w-4 mr-2" />
+                      )}
+                      {canAddDevice ? 'Add Your Device' : 'Device Limit Reached'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4">
+                    {devices.map((device) => {
+                      const status = getDeviceStatus(device);
+                      const StatusIcon = getStatusIcon(status);
+                      
+                      return (
+                        <div key={device.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow duration-200">
+                          {/* Device Header */}
+                          <div className="flex items-start justify-between mb-4">
+                            <div className="flex items-center space-x-3">
+                              <div className="bg-emerald-100 p-2 rounded-lg">
+                                <Smartphone className="h-5 w-5 text-emerald-600" />
+                              </div>
+                              <div>
+                                <h4 className="font-semibold text-gray-900">{device.device_name}</h4>
+                                <p className="text-sm text-gray-500">{device.device_id}</p>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center space-x-1">
+                              <button
+                                onClick={() => startDeviceEdit(device)}
+                                className="p-1 text-gray-400 hover:text-gray-600 transition-colors duration-200"
+                              >
+                                <Edit3 className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeviceDelete(device.device_id)}
+                                className="p-1 text-gray-400 hover:text-red-600 transition-colors duration-200"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Status */}
+                          <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mb-3 ${getStatusColor(status)}`}>
+                            <StatusIcon className="h-3 w-3 mr-1" />
+                            {status === 'online' ? 'Online' : status === 'recent' ? 'Recently Active' : status === 'offline' ? 'Offline' : 'Never Connected'}
+                          </div>
+
+                          {/* Device Info */}
+                          <div className="space-y-2 mb-4">
+                            {device.location && (
+                              <div className="flex items-center text-sm text-gray-600">
+                                <MapPin className="h-4 w-4 mr-2" />
+                                {device.location}
+                              </div>
+                            )}
+                            
+                            <div className="flex items-center text-sm text-gray-600">
+                              <Calendar className="h-4 w-4 mr-2" />
+                              Added {new Date(device.created_at).toLocaleDateString()}
+                            </div>
+
+                            {device.last_seen && (
+                              <div className="flex items-center text-sm text-gray-600">
+                                <Wifi className="h-4 w-4 mr-2" />
+                                Last seen {new Date(device.last_seen).toLocaleString()}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* API Key */}
+                          <div className="border-t border-gray-100 pt-4">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-medium text-gray-700">API Key</span>
+                              <button
+                                onClick={() => copyApiKey(device.api_key)}
+                                className="flex items-center text-xs text-emerald-600 hover:text-emerald-700 transition-colors duration-200"
+                              >
+                                <Key className="h-3 w-3 mr-1" />
+                                Copy
+                              </button>
+                            </div>
+                            <div className="mt-1 font-mono text-xs text-gray-500 bg-gray-50 p-2 rounded border truncate">
+                              {device.api_key}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Thresholds Tab */}
             {activeTab === 'thresholds' && (
               <div className="space-y-6">
                 {/* Device Selection */}
@@ -425,7 +864,7 @@ const Settings: React.FC = () => {
                     {/* Thresholds Configuration */}
                     {selectedDevice && (
                       <div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-4">Sensor Thresholds</h3>
+                        <h4 className="text-lg font-medium text-gray-900 mb-4">Sensor Thresholds</h4>
                         <p className="text-sm text-gray-600 mb-6">
                           Configure alert thresholds for your sensor parameters. You'll receive notifications when values go outside these ranges.
                           Changes are saved automatically when you modify the values.
@@ -442,7 +881,7 @@ const Settings: React.FC = () => {
                               <div key={param.key} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3">
                                   <div>
-                                    <h4 className="font-medium text-gray-900">{param.label}</h4>
+                                    <h5 className="font-medium text-gray-900">{param.label}</h5>
                                     <p className="text-sm text-gray-500">Unit: {param.unit || 'N/A'}</p>
                                   </div>
                                   
@@ -499,13 +938,13 @@ const Settings: React.FC = () => {
                 ) : (
                   <div className="text-center py-8">
                     <Smartphone className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No Devices Found</h3>
-                    <p className="text-gray-600">
+                    <h4 className="text-lg font-medium text-gray-900 mb-2">No Devices Found</h4>
+                    <p className="text-gray-600 mb-4">
                       You need to add a device first before configuring thresholds.
                     </p>
                     <button
-                      onClick={() => window.location.href = '/devices'}
-                      className="mt-4 inline-flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200"
+                      onClick={() => setActiveTab('devices')}
+                      className="inline-flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200"
                     >
                       <Smartphone className="h-4 w-4 mr-2" />
                       Go to Device Management

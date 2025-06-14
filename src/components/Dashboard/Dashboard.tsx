@@ -184,7 +184,7 @@ const Dashboard: React.FC = () => {
             
             <div className="space-y-4 sm:space-y-0 sm:space-x-4 sm:flex sm:justify-center">
               <Link
-                to="/devices"
+                to="/settings"
                 className="inline-flex items-center px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200 text-lg font-medium"
               >
                 <Plus className="h-5 w-5 mr-2" />
@@ -208,7 +208,7 @@ const Dashboard: React.FC = () => {
               <div className="text-left space-y-2 text-blue-800">
                 <div className="flex items-center">
                   <span className="bg-blue-200 text-blue-900 rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold mr-3">1</span>
-                  Add your ESP32 device with a unique Device ID
+                  Go to Settings and add your ESP32 device with a unique Device ID
                 </div>
                 <div className="flex items-center">
                   <span className="bg-blue-200 text-blue-900 rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold mr-3">2</span>
