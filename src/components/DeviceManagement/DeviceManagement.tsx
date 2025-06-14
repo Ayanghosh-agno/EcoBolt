@@ -11,7 +11,8 @@ import {
   Key,
   Loader2,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  Lock
 } from 'lucide-react';
 import { supabaseApi } from '../../services/supabaseApi';
 
@@ -103,6 +104,12 @@ const DeviceManagement: React.FC = () => {
         });
         setSuccess('Device updated successfully');
       } else {
+        // Check if user already has a device
+        if (devices.length >= 1) {
+          setError('You can only add one device per account');
+          return;
+        }
+
         // Add new device
         const newDevice = await supabaseApi.addDevice(
           formData.device_id,
@@ -186,6 +193,9 @@ const DeviceManagement: React.FC = () => {
     return status === 'online' || status === 'recent' ? Wifi : WifiOff;
   };
 
+  // Check if user can add more devices (limit: 1)
+  const canAddDevice = devices.length < 1;
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -201,16 +211,37 @@ const DeviceManagement: React.FC = () => {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Device Management</h1>
-            <p className="text-gray-600 mt-1">Manage your IoT devices and monitor their status</p>
+            <p className="text-gray-600 mt-1">Manage your IoT device and monitor its status</p>
           </div>
           <button
             onClick={() => setShowAddForm(true)}
-            className="mt-4 sm:mt-0 flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200"
+            disabled={!canAddDevice}
+            className={`mt-4 sm:mt-0 flex items-center px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200 ${
+              canAddDevice
+                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
           >
-            <Plus className="h-5 w-5 mr-2" />
-            Add Device
+            {canAddDevice ? (
+              <Plus className="h-5 w-5 mr-2" />
+            ) : (
+              <Lock className="h-5 w-5 mr-2" />
+            )}
+            {canAddDevice ? 'Add Device' : 'Device Limit Reached'}
           </button>
         </div>
+
+        {/* Device Limit Notice */}
+        {!canAddDevice && (
+          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <AlertCircle className="h-5 w-5 text-blue-500 mr-2" />
+              <p className="text-blue-700 font-medium">
+                Device Limit: You can only have one device per account. To add a new device, please delete your existing device first.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Messages */}
         {error && (
@@ -329,13 +360,22 @@ const DeviceManagement: React.FC = () => {
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
             <Smartphone className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No devices found</h3>
-            <p className="text-gray-600 mb-6">Add your first IoT device to start monitoring sensor data</p>
+            <p className="text-gray-600 mb-6">Add your IoT device to start monitoring sensor data</p>
             <button
               onClick={() => setShowAddForm(true)}
-              className="inline-flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200"
+              disabled={!canAddDevice}
+              className={`inline-flex items-center px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200 ${
+                canAddDevice
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
             >
-              <Plus className="h-5 w-5 mr-2" />
-              Add Your First Device
+              {canAddDevice ? (
+                <Plus className="h-5 w-5 mr-2" />
+              ) : (
+                <Lock className="h-5 w-5 mr-2" />
+              )}
+              {canAddDevice ? 'Add Your Device' : 'Device Limit Reached'}
             </button>
           </div>
         ) : (
@@ -423,47 +463,6 @@ const DeviceManagement: React.FC = () => {
             })}
           </div>
         )}
-
-        {/* ESP32 Integration Instructions */}
-        <div className="mt-12 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">ESP32 Integration Instructions</h3>
-          <div className="space-y-4 text-sm text-gray-600">
-            <div>
-              <h4 className="font-medium text-gray-900 mb-2">1. Data Ingestion Endpoint</h4>
-              <div className="bg-gray-50 p-3 rounded border font-mono text-xs">
-                POST https://bwkuykrjycprxlcrzwwz.supabase.co/functions/v1/esp32-data-ingestion
-              </div>
-            </div>
-            
-            <div>
-              <h4 className="font-medium text-gray-900 mb-2">2. Required Headers</h4>
-              <div className="bg-gray-50 p-3 rounded border font-mono text-xs">
-                Content-Type: application/json<br/>
-                Authorization: Bearer {import.meta.env.VITE_SUPABASE_ANON_KEY}
-              </div>
-            </div>
-            
-            <div>
-              <h4 className="font-medium text-gray-900 mb-2">3. Payload Example</h4>
-              <div className="bg-gray-50 p-3 rounded border font-mono text-xs">
-                {`{
-  "device_id": "ESP32_001",
-  "api_key": "your-device-api-key",
-  "atmo_temp": 25.5,
-  "humidity": 65.2,
-  "light": 450,
-  "soil_temp": 22.1,
-  "moisture": 45.8,
-  "ec": 1.2,
-  "ph": 6.8,
-  "nitrogen": 35.0,
-  "phosphorus": 18.5,
-  "potassium": 28.3
-}`}
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );
