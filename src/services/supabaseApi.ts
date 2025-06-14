@@ -91,53 +91,80 @@ export class SupabaseAPI {
     try {
       console.log('👤 SupabaseAPI: Getting current user...');
       
-      const { data: { user } } = await this.withTimeout(
-        supabase.auth.getUser(),
-        10000 // increased from 3000 to 10000
+      // First, try to get the session which is faster and more reliable
+      const { data: { session }, error: sessionError } = await this.withTimeout(
+        supabase.auth.getSession(),
+        5000 // shorter timeout for session check
       );
       
-      console.log('👤 SupabaseAPI: Auth user result:', user?.id ? 'Found' : 'Not found');
-      
-      if (!user) {
-        console.log('❌ SupabaseAPI: No authenticated user');
+      if (sessionError) {
+        console.error('❌ SupabaseAPI: Session error:', sessionError);
         return null;
       }
+      
+      if (!session?.user) {
+        console.log('❌ SupabaseAPI: No session or user found');
+        return null;
+      }
+      
+      const user = session.user;
+      console.log('👤 SupabaseAPI: Session user found:', user.id);
 
       console.log('📋 SupabaseAPI: Fetching user profile...');
       
-      // Try to get user profile with timeout - increased from 3000 to 10000
-      const { data: profile, error } = await this.withTimeout(
-        supabase
-          .from('user_profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single(),
-        10000
-      );
+      // Try to get user profile with timeout
+      try {
+        const { data: profile, error } = await this.withTimeout(
+          supabase
+            .from('user_profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single(),
+          8000
+        );
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('⚠️ SupabaseAPI: Error fetching user profile:', error);
+        if (error && error.code !== 'PGRST116') {
+          console.error('⚠️ SupabaseAPI: Error fetching user profile:', error);
+        }
+
+        const userData = {
+          id: user.id,
+          email: user.email!,
+          name: profile?.full_name || user.user_metadata?.full_name || 'User',
+          phone: profile?.phone || '',
+          farmName: profile?.farm_name || '',
+          location: profile?.location || '',
+        };
+
+        console.log('✅ SupabaseAPI: User data assembled:', userData.name);
+        return userData;
+        
+      } catch (profileError) {
+        console.error('⚠️ SupabaseAPI: Profile fetch failed, using basic user info:', profileError);
+        
+        // Return basic user info from session if profile fetch fails
+        const fallbackUser = {
+          id: user.id,
+          email: user.email!,
+          name: user.user_metadata?.full_name || 'User',
+          phone: '',
+          farmName: '',
+          location: '',
+        };
+        console.log('✅ SupabaseAPI: Fallback user created:', fallbackUser.name);
+        return fallbackUser;
       }
-
-      const userData = {
-        id: user.id,
-        email: user.email!,
-        name: profile?.full_name || user.user_metadata?.full_name || 'User',
-        phone: profile?.phone || '',
-        farmName: profile?.farm_name || '',
-        location: profile?.location || '',
-      };
-
-      console.log('✅ SupabaseAPI: User data assembled:', userData.name);
-      return userData;
       
     } catch (error) {
       console.error('❌ SupabaseAPI: Error in getCurrentUser:', error);
       
-      // If it's a timeout or network error, try to get basic user info from auth
+      // Final fallback - try to get user from getUser() with very short timeout
       try {
-        console.log('🔄 SupabaseAPI: Attempting fallback user info...');
-        const { data: { user } } = await supabase.auth.getUser();
+        console.log('🔄 SupabaseAPI: Attempting final fallback with getUser()...');
+        const { data: { user } } = await this.withTimeout(
+          supabase.auth.getUser(),
+          3000 // very short timeout
+        );
         
         if (user) {
           const fallbackUser = {
@@ -148,11 +175,11 @@ export class SupabaseAPI {
             farmName: '',
             location: '',
           };
-          console.log('✅ SupabaseAPI: Fallback user created:', fallbackUser.name);
+          console.log('✅ SupabaseAPI: Final fallback user created:', fallbackUser.name);
           return fallbackUser;
         }
       } catch (fallbackError) {
-        console.error('❌ SupabaseAPI: Fallback also failed:', fallbackError);
+        console.error('❌ SupabaseAPI: Final fallback also failed:', fallbackError);
       }
       
       return null;
