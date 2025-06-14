@@ -100,8 +100,7 @@ export class SupabaseAPI {
             supabase
               .from('user_profiles')
               .select('*')
-              .eq('id', userId)
-              .single(),
+              .eq('id', userId),
             8000
           );
 
