@@ -282,7 +282,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
       console.log('✅ AuthProvider: Logout successful');
     } catch (error) {
-      console.error('❌ AuthProvider: Logout error:', error);
+      // Check if the error is due to session not found
+      if (error instanceof AuthApiError && error.message.includes('Session from session_id claim in JWT does not exist')) {
+        console.warn('⚠️ AuthProvider: Supabase session not found during logout, clearing client session anyway.');
+        setUser(null); // Clear user state
+      }
+      // Always set loading to false after a logout attempt, regardless of error type
+      setIsLoading(false);
     }
   };
 
