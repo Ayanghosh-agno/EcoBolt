@@ -91,14 +91,14 @@ export class SupabaseAPI {
     try {
       console.log('👤 SupabaseAPI: Getting current user...');
       
-      const { data: { user } } = await this.withTimeout(
-        supabase.auth.getUser(),
-        10000 // increased from 3000 to 10000
-      );
+      // const { data: { user } } = await this.withTimeout(
+      //   supabase.auth.getUser(),
+      //   10000 // increased from 3000 to 10000
+      // );
       
-      console.log('👤 SupabaseAPI: Auth user result:', user?.id ? 'Found' : 'Not found');
+      console.log('👤 SupabaseAPI: Auth user result:', session?.user?.id ? 'Found' : 'Not found');
       
-      if (!user) {
+      if (!session) {
         console.log('❌ SupabaseAPI: No authenticated user');
         return null;
       }
@@ -110,7 +110,7 @@ export class SupabaseAPI {
         supabase
           .from('user_profiles')
           .select('*')
-          .eq('id', user.id)
+          .eq('id', session?.user?.id)
           .single(),
         10000
       );
@@ -120,8 +120,8 @@ export class SupabaseAPI {
       }
 
       const userData = {
-        id: user.id,
-        email: user.email!,
+        id: session?.user?.id,
+        email: session?.user?.email!,
         name: profile?.full_name || user.user_metadata?.full_name || 'User',
         phone: profile?.phone || '',
         farmName: profile?.farm_name || '',
