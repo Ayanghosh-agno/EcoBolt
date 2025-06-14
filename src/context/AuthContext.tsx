@@ -157,7 +157,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 session.user.email!,
                 session.user.user_metadata
               ); 
-              console.log('✅ AuthProvider: Profile loaded after sign in:', currentUser?.name);              
+              console.log('✅ AuthProvider: Profile loaded after sign in:', currentUser?.name);   
+              setUser(currentUser);  
+              
             } catch (error) {
               console.error('⚠️ AuthProvider: Error getting user after sign in, using fallback:', error);
               // Fallback to basic user info
