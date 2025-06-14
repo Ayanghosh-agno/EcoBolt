@@ -80,10 +80,7 @@ export class SupabaseAPI {
         console.log('📋 SupabaseAPI: Using provided user data, fetching profile...');
         
         try {
-          const { data, error } = await supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('id', userId);
+          
 
           
       let query = supabase
