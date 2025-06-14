@@ -121,7 +121,17 @@ export class SupabaseAPI {
     this.checkConfiguration();
     
     const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    
+    if (error) {
+      // Check if the error is due to a non-existent session
+      if (error.message && error.message.includes('Session from session_id claim in JWT does not exist')) {
+        console.warn('⚠️ SupabaseAPI: Attempted to sign out non-existent session, treating as successful logout');
+        return; // Don't throw error for non-existent sessions
+      }
+      
+      // For other errors, still throw them
+      throw error;
+    }
   }
 
   async getCurrentUser(userId?: string, userEmail?: string, userMetadata?: any): Promise<User | null> {
