@@ -101,7 +101,7 @@ export class SupabaseAPI {
               .from('user_profiles')
               .select('*')
               .eq('id', userId),
-            8000
+            10000
           );
 
           if (error && error.code !== 'PGRST116') {
