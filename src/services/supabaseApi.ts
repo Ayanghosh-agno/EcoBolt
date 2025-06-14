@@ -599,8 +599,7 @@ export class SupabaseAPI {
       
       let query = supabase
         .from('thresholds')
-        .select('*')
-        .eq('is_active', true);
+        .select('*');
 
       if (deviceId) {
         query = query.eq('device_id', deviceId);
@@ -620,10 +619,10 @@ export class SupabaseAPI {
     }
   }
 
-  async updateThreshold(deviceId: string, parameter: string, minValue?: number, maxValue?: number) {
+  async updateThreshold(deviceId: string, parameter: string, minValue?: number, maxValue?: number, alertEmail?: boolean, alertSms?: boolean, isActive?: boolean) {
     this.checkConfiguration();
     
-    console.log('🎯 SupabaseAPI: Updating threshold:', { deviceId, parameter, minValue, maxValue });
+    console.log('🎯 SupabaseAPI: Updating threshold:', { deviceId, parameter, minValue, maxValue, alertEmail, alertSms, isActive });
     
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
@@ -651,9 +650,9 @@ export class SupabaseAPI {
         parameter,
         min_value: minValue ?? null,
         max_value: maxValue ?? null,
-        alert_email: true,
-        alert_sms: false,
-        is_active: true,
+        alert_email: alertEmail ?? true,
+        alert_sms: alertSms ?? false,
+        is_active: isActive ?? true,
         updated_at: new Date().toISOString(),
       };
 
@@ -698,6 +697,45 @@ export class SupabaseAPI {
       }
     } catch (error) {
       console.error('❌ SupabaseAPI: Error in updateThreshold:', error);
+      throw error;
+    }
+  }
+
+  // Update threshold properties (alert preferences and active status)
+  async updateThresholdProperties(deviceId: string, parameter: string, updates: {
+    alert_email?: boolean;
+    alert_sms?: boolean;
+    is_active?: boolean;
+  }) {
+    this.checkConfiguration();
+    
+    console.log('🎯 SupabaseAPI: Updating threshold properties:', { deviceId, parameter, updates });
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    try {
+      const { data, error } = await supabase
+        .from('thresholds')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('device_id', deviceId)
+        .eq('parameter', parameter)
+        .eq('user_id', user.id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ SupabaseAPI: Error updating threshold properties:', error);
+        throw error;
+      }
+
+      console.log('✅ SupabaseAPI: Threshold properties updated successfully');
+      return data;
+    } catch (error) {
+      console.error('❌ SupabaseAPI: Error in updateThresholdProperties:', error);
       throw error;
     }
   }

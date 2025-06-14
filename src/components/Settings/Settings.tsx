@@ -20,7 +20,13 @@ import {
   Edit3,
   Trash2,
   Key,
-  Lock
+  Lock,
+  Bell,
+  BellOff,
+  MessageSquare,
+  MailIcon,
+  ToggleLeft,
+  ToggleRight
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { supabaseApi } from '../../services/supabaseApi';
@@ -306,8 +312,12 @@ const Settings: React.FC = () => {
   };
 
   // Threshold management functions
+  const getThreshold = (parameter: string): Threshold | null => {
+    return thresholds.find(t => t.parameter === parameter) || null;
+  };
+
   const getThresholdValue = (parameter: string, type: 'min' | 'max'): number => {
-    const threshold = thresholds.find(t => t.parameter === parameter);
+    const threshold = getThreshold(parameter);
     if (threshold) {
       return type === 'min' ? (threshold.min_value || 0) : (threshold.max_value || 0);
     }
@@ -315,6 +325,21 @@ const Settings: React.FC = () => {
     // Return default values if no threshold exists
     const paramDef = thresholdParameters.find(p => p.key === parameter);
     return type === 'min' ? (paramDef?.defaultMin || 0) : (paramDef?.defaultMax || 0);
+  };
+
+  const getThresholdProperty = (parameter: string, property: 'alert_email' | 'alert_sms' | 'is_active'): boolean => {
+    const threshold = getThreshold(parameter);
+    if (threshold) {
+      return threshold[property];
+    }
+    
+    // Return default values if no threshold exists
+    switch (property) {
+      case 'alert_email': return true;
+      case 'alert_sms': return false;
+      case 'is_active': return true;
+      default: return true;
+    }
   };
 
   const updateThreshold = async (parameter: string, minValue: number, maxValue: number) => {
@@ -359,6 +384,34 @@ const Settings: React.FC = () => {
     } else {
       setError(`Minimum value cannot be greater than maximum value for ${parameter}`);
       setTimeout(() => setError(''), 3000);
+    }
+  };
+
+  // Handle threshold property changes (alert preferences and active status)
+  const handleThresholdPropertyChange = async (parameter: string, property: 'alert_email' | 'alert_sms' | 'is_active', value: boolean) => {
+    if (!selectedDevice) return;
+
+    console.log('🎯 Settings: Updating threshold property:', { parameter, property, value });
+    setThresholdsSaving(parameter);
+    setError('');
+
+    try {
+      await supabaseApi.updateThresholdProperties(selectedDevice, parameter, {
+        [property]: value
+      });
+      
+      setThresholdsSuccess(`Updated ${parameter} ${property.replace('_', ' ')} successfully`);
+      setTimeout(() => setThresholdsSuccess(''), 3000);
+      
+      // Refresh thresholds to get the latest data
+      await fetchThresholds();
+      
+      console.log('✅ Settings: Threshold property updated successfully');
+    } catch (error) {
+      console.error('❌ Settings: Error updating threshold property:', error);
+      setError(`Failed to update ${parameter} ${property}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setThresholdsSaving('');
     }
   };
 
@@ -864,9 +917,9 @@ const Settings: React.FC = () => {
                     {/* Thresholds Configuration */}
                     {selectedDevice && (
                       <div>
-                        <h4 className="text-lg font-medium text-gray-900 mb-4">Sensor Thresholds</h4>
+                        <h4 className="text-lg font-medium text-gray-900 mb-4">Sensor Thresholds & Alert Preferences</h4>
                         <p className="text-sm text-gray-600 mb-6">
-                          Configure alert thresholds for your sensor parameters. You'll receive notifications when values go outside these ranges.
+                          Configure alert thresholds for your sensor parameters and choose how you want to receive notifications.
                           Changes are saved automatically when you modify the values.
                         </p>
 
@@ -877,59 +930,138 @@ const Settings: React.FC = () => {
                           </div>
                         ) : (
                           <div className="space-y-4">
-                            {thresholdParameters.map((param) => (
-                              <div key={param.key} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3">
-                                  <div>
-                                    <h5 className="font-medium text-gray-900">{param.label}</h5>
-                                    <p className="text-sm text-gray-500">Unit: {param.unit || 'N/A'}</p>
-                                  </div>
-                                  
-                                  {thresholdsSaving === param.key && (
-                                    <div className="flex items-center text-sm text-blue-600 mt-2 sm:mt-0">
-                                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                                      Saving...
+                            {thresholdParameters.map((param) => {
+                              const isActive = getThresholdProperty(param.key, 'is_active');
+                              const alertEmail = getThresholdProperty(param.key, 'alert_email');
+                              const alertSms = getThresholdProperty(param.key, 'alert_sms');
+                              
+                              return (
+                                <div key={param.key} className={`rounded-lg p-4 border transition-all duration-200 ${
+                                  isActive 
+                                    ? 'bg-white border-gray-200 shadow-sm' 
+                                    : 'bg-gray-50 border-gray-200 opacity-75'
+                                }`}>
+                                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
+                                    <div className="flex-1">
+                                      <div className="flex items-center space-x-3 mb-2">
+                                        <h5 className="font-medium text-gray-900">{param.label}</h5>
+                                        <div className="flex items-center space-x-2">
+                                          {/* Active/Inactive Toggle */}
+                                          <button
+                                            onClick={() => handleThresholdPropertyChange(param.key, 'is_active', !isActive)}
+                                            disabled={thresholdsSaving === param.key}
+                                            className={`flex items-center space-x-1 px-2 py-1 rounded-full text-xs font-medium transition-all duration-200 ${
+                                              isActive 
+                                                ? 'bg-green-100 text-green-700 hover:bg-green-200' 
+                                                : 'bg-red-100 text-red-700 hover:bg-red-200'
+                                            } ${thresholdsSaving === param.key ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                          >
+                                            {isActive ? <Bell className="h-3 w-3" /> : <BellOff className="h-3 w-3" />}
+                                            <span>{isActive ? 'Active' : 'Disabled'}</span>
+                                          </button>
+                                        </div>
+                                      </div>
+                                      <p className="text-sm text-gray-500">Unit: {param.unit || 'N/A'}</p>
                                     </div>
-                                  )}
-                                </div>
-                                
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                  <div>
-                                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                                      Minimum Value
-                                    </label>
-                                    <input
-                                      type="number"
-                                      step="0.1"
-                                      value={getThresholdValue(param.key, 'min')}
-                                      onChange={(e) => handleThresholdChange(param.key, 'min', e.target.value)}
-                                      disabled={thresholdsSaving === param.key}
-                                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                                      placeholder={`Default: ${param.defaultMin}`}
-                                    />
+                                    
+                                    {thresholdsSaving === param.key && (
+                                      <div className="flex items-center text-sm text-blue-600 mt-2 sm:mt-0">
+                                        <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                                        Saving...
+                                      </div>
+                                    )}
                                   </div>
                                   
-                                  <div>
-                                    <label className="block text-xs font-medium text-gray-700 mb-1">
-                                      Maximum Value
-                                    </label>
-                                    <input
-                                      type="number"
-                                      step="0.1"
-                                      value={getThresholdValue(param.key, 'max')}
-                                      onChange={(e) => handleThresholdChange(param.key, 'max', e.target.value)}
-                                      disabled={thresholdsSaving === param.key}
-                                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                                      placeholder={`Default: ${param.defaultMax}`}
-                                    />
+                                  {/* Threshold Values */}
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                                    <div>
+                                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                                        Minimum Value
+                                      </label>
+                                      <input
+                                        type="number"
+                                        step="0.1"
+                                        value={getThresholdValue(param.key, 'min')}
+                                        onChange={(e) => handleThresholdChange(param.key, 'min', e.target.value)}
+                                        disabled={thresholdsSaving === param.key || !isActive}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                        placeholder={`Default: ${param.defaultMin}`}
+                                      />
+                                    </div>
+                                    
+                                    <div>
+                                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                                        Maximum Value
+                                      </label>
+                                      <input
+                                        type="number"
+                                        step="0.1"
+                                        value={getThresholdValue(param.key, 'max')}
+                                        onChange={(e) => handleThresholdChange(param.key, 'max', e.target.value)}
+                                        disabled={thresholdsSaving === param.key || !isActive}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                        placeholder={`Default: ${param.defaultMax}`}
+                                      />
+                                    </div>
+                                  </div>
+
+                                  {/* Alert Preferences */}
+                                  <div className="border-t border-gray-200 pt-4">
+                                    <h6 className="text-sm font-medium text-gray-700 mb-3">Alert Preferences</h6>
+                                    <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-6">
+                                      {/* Email Alert Toggle */}
+                                      <div className="flex items-center space-x-3">
+                                        <button
+                                          onClick={() => handleThresholdPropertyChange(param.key, 'alert_email', !alertEmail)}
+                                          disabled={thresholdsSaving === param.key || !isActive}
+                                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${
+                                            alertEmail && isActive ? 'bg-emerald-600' : 'bg-gray-300'
+                                          } ${thresholdsSaving === param.key || !isActive ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                          <span
+                                            className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform duration-200 ${
+                                              alertEmail && isActive ? 'translate-x-5' : 'translate-x-1'
+                                            }`}
+                                          />
+                                        </button>
+                                        <div className="flex items-center space-x-1">
+                                          <MailIcon className="h-4 w-4 text-gray-500" />
+                                          <span className="text-sm text-gray-700">Email Alerts</span>
+                                        </div>
+                                      </div>
+
+                                      {/* SMS Alert Toggle */}
+                                      <div className="flex items-center space-x-3">
+                                        <button
+                                          onClick={() => handleThresholdPropertyChange(param.key, 'alert_sms', !alertSms)}
+                                          disabled={thresholdsSaving === param.key || !isActive}
+                                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${
+                                            alertSms && isActive ? 'bg-emerald-600' : 'bg-gray-300'
+                                          } ${thresholdsSaving === param.key || !isActive ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                          <span
+                                            className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform duration-200 ${
+                                              alertSms && isActive ? 'translate-x-5' : 'translate-x-1'
+                                            }`}
+                                          />
+                                        </button>
+                                        <div className="flex items-center space-x-1">
+                                          <MessageSquare className="h-4 w-4 text-gray-500" />
+                                          <span className="text-sm text-gray-700">SMS Alerts</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="mt-3 text-xs text-gray-500">
+                                    Default range: {param.defaultMin} - {param.defaultMax} {param.unit}
+                                    {!isActive && (
+                                      <span className="ml-2 text-red-600 font-medium">• Alerts disabled for this parameter</span>
+                                    )}
                                   </div>
                                 </div>
-                                
-                                <div className="mt-2 text-xs text-gray-500">
-                                  Default range: {param.defaultMin} - {param.defaultMax} {param.unit}
-                                </div>
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         )}
                       </div>
