@@ -149,15 +149,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 farmName: '',
                 location: '',
               };
-              console.log('✅ AuthProvider: Profile loaded after sign in:', currentUser?.name);
+              
               setUser(fallbackUser);
               
               const currentUser = await supabaseApi.getCurrentUser(
                 session.user.id,
                 session.user.email!,
                 session.user.user_metadata
-              );             
-              
+              ); 
+              console.log('✅ AuthProvider: Profile loaded after sign in:', currentUser?.name);              
             } catch (error) {
               console.error('⚠️ AuthProvider: Error getting user after sign in, using fallback:', error);
               // Fallback to basic user info
