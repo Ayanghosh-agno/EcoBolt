@@ -9,31 +9,45 @@ export class SupabaseAPI {
     }
   }
 
+  // Add timeout wrapper for async operations
+  private async withTimeout<T>(promise: Promise<T>, timeoutMs: number = 5000): Promise<T> {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) => 
+        setTimeout(() => reject(new Error('Operation timed out')), timeoutMs)
+      )
+    ]);
+  }
+
   // Authentication
   async signUp(email: string, password: string, fullName: string) {
     this.checkConfiguration();
     
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
+    const { data, error } = await this.withTimeout(
+      supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+          },
         },
-      },
-    });
+      })
+    );
 
     if (error) throw error;
 
     // Create user profile if user was created
     if (data.user) {
       try {
-        const { error: profileError } = await supabase
-          .from('user_profiles')
-          .insert({
-            id: data.user.id,
-            full_name: fullName,
-          });
+        const { error: profileError } = await this.withTimeout(
+          supabase
+            .from('user_profiles')
+            .insert({
+              id: data.user.id,
+              full_name: fullName,
+            })
+        );
 
         if (profileError && profileError.code !== '23505') {
           // 23505 is unique violation, which means profile already exists
@@ -50,10 +64,12 @@ export class SupabaseAPI {
   async signIn(email: string, password: string) {
     this.checkConfiguration();
     
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { data, error } = await this.withTimeout(
+      supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+    );
 
     if (error) throw error;
     return data;
@@ -62,32 +78,48 @@ export class SupabaseAPI {
   async signOut() {
     this.checkConfiguration();
     
-    const { error } = await supabase.auth.signOut();
+    const { error } = await this.withTimeout(supabase.auth.signOut());
     if (error) throw error;
   }
 
   async getCurrentUser(): Promise<User | null> {
     if (!isSupabaseConfigured()) {
+      console.log('🔧 SupabaseAPI: Not configured, returning null');
       return null;
     }
     
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      console.log('👤 SupabaseAPI: Getting current user...');
       
-      if (!user) return null;
-
-      // Try to get user profile
-      const { data: profile, error } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching user profile:', error);
+      const { data: { user } } = await this.withTimeout(
+        supabase.auth.getUser(),
+        3000 // 3 second timeout
+      );
+      
+      console.log('👤 SupabaseAPI: Auth user result:', user?.id ? 'Found' : 'Not found');
+      
+      if (!user) {
+        console.log('❌ SupabaseAPI: No authenticated user');
+        return null;
       }
 
-      return {
+      console.log('📋 SupabaseAPI: Fetching user profile...');
+      
+      // Try to get user profile with timeout
+      const { data: profile, error } = await this.withTimeout(
+        supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single(),
+        3000 // 3 second timeout
+      );
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('⚠️ SupabaseAPI: Error fetching user profile:', error);
+      }
+
+      const userData = {
         id: user.id,
         email: user.email!,
         name: profile?.full_name || user.user_metadata?.full_name || 'User',
@@ -95,8 +127,34 @@ export class SupabaseAPI {
         farmName: profile?.farm_name || '',
         location: profile?.location || '',
       };
+
+      console.log('✅ SupabaseAPI: User data assembled:', userData.name);
+      return userData;
+      
     } catch (error) {
-      console.error('Error in getCurrentUser:', error);
+      console.error('❌ SupabaseAPI: Error in getCurrentUser:', error);
+      
+      // If it's a timeout or network error, try to get basic user info from auth
+      try {
+        console.log('🔄 SupabaseAPI: Attempting fallback user info...');
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (user) {
+          const fallbackUser = {
+            id: user.id,
+            email: user.email!,
+            name: user.user_metadata?.full_name || 'User',
+            phone: '',
+            farmName: '',
+            location: '',
+          };
+          console.log('✅ SupabaseAPI: Fallback user created:', fallbackUser.name);
+          return fallbackUser;
+        }
+      } catch (fallbackError) {
+        console.error('❌ SupabaseAPI: Fallback also failed:', fallbackError);
+      }
+      
       return null;
     }
   }
@@ -104,22 +162,30 @@ export class SupabaseAPI {
   // Device Management
   async getUserDevices() {
     if (!isSupabaseConfigured()) {
+      console.log('🔧 SupabaseAPI: Not configured, returning empty devices');
       return [];
     }
     
     try {
-      const { data, error } = await supabase
-        .from('devices')
-        .select('*')
-        .order('created_at', { ascending: false });
+      console.log('📱 SupabaseAPI: Fetching user devices...');
+      
+      const { data, error } = await this.withTimeout(
+        supabase
+          .from('devices')
+          .select('*')
+          .order('created_at', { ascending: false }),
+        5000
+      );
 
       if (error) {
-        console.error('Error fetching devices:', error);
+        console.error('❌ SupabaseAPI: Error fetching devices:', error);
         return [];
       }
+      
+      console.log('✅ SupabaseAPI: Devices fetched:', data?.length || 0);
       return data || [];
     } catch (error) {
-      console.error('Error in getUserDevices:', error);
+      console.error('❌ SupabaseAPI: Error in getUserDevices:', error);
       return [];
     }
   }
@@ -127,19 +193,21 @@ export class SupabaseAPI {
   async addDevice(deviceId: string, deviceName: string, location?: string) {
     this.checkConfiguration();
     
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await this.withTimeout(supabase.auth.getUser());
     if (!user) throw new Error('Not authenticated');
 
-    const { data, error } = await supabase
-      .from('devices')
-      .insert({
-        device_id: deviceId,
-        user_id: user.id,
-        device_name: deviceName,
-        location,
-      })
-      .select()
-      .single();
+    const { data, error } = await this.withTimeout(
+      supabase
+        .from('devices')
+        .insert({
+          device_id: deviceId,
+          user_id: user.id,
+          device_name: deviceName,
+          location,
+        })
+        .select()
+        .single()
+    );
 
     if (error) throw error;
     return data;
@@ -148,12 +216,14 @@ export class SupabaseAPI {
   async updateDevice(deviceId: string, updates: { device_name?: string; location?: string; is_active?: boolean }) {
     this.checkConfiguration();
     
-    const { data, error } = await supabase
-      .from('devices')
-      .update(updates)
-      .eq('device_id', deviceId)
-      .select()
-      .single();
+    const { data, error } = await this.withTimeout(
+      supabase
+        .from('devices')
+        .update(updates)
+        .eq('device_id', deviceId)
+        .select()
+        .single()
+    );
 
     if (error) throw error;
     return data;
@@ -162,10 +232,12 @@ export class SupabaseAPI {
   async deleteDevice(deviceId: string) {
     this.checkConfiguration();
     
-    const { error } = await supabase
-      .from('devices')
-      .delete()
-      .eq('device_id', deviceId);
+    const { error } = await this.withTimeout(
+      supabase
+        .from('devices')
+        .delete()
+        .eq('device_id', deviceId)
+    );
 
     if (error) throw error;
   }
@@ -173,10 +245,13 @@ export class SupabaseAPI {
   // Sensor Data
   async getLatestSensorData(deviceId?: string): Promise<SensorData | null> {
     if (!isSupabaseConfigured()) {
+      console.log('🔧 SupabaseAPI: Not configured, returning null sensor data');
       return null;
     }
     
     try {
+      console.log('📊 SupabaseAPI: Fetching latest sensor data...');
+      
       let query = supabase
         .from('sensor_data')
         .select('*')
@@ -187,30 +262,35 @@ export class SupabaseAPI {
         query = query.eq('device_id', deviceId);
       }
 
-      const { data, error } = await query;
+      const { data, error } = await this.withTimeout(query, 5000);
 
       if (error) {
-        console.error('Error fetching sensor data:', error);
+        console.error('❌ SupabaseAPI: Error fetching sensor data:', error);
         return null;
       }
 
       if (!data || data.length === 0) {
+        console.log('📊 SupabaseAPI: No sensor data found');
         return null;
       }
 
+      console.log('✅ SupabaseAPI: Sensor data fetched');
       return this.transformSensorData(data[0]);
     } catch (error) {
-      console.error('Error in getLatestSensorData:', error);
+      console.error('❌ SupabaseAPI: Error in getLatestSensorData:', error);
       return null;
     }
   }
 
   async getSensorDataHistory(timeRange: '24h' | '7d' | '30d', deviceId?: string): Promise<SensorData[]> {
     if (!isSupabaseConfigured()) {
+      console.log('🔧 SupabaseAPI: Not configured, returning empty sensor history');
       return [];
     }
     
     try {
+      console.log('📊 SupabaseAPI: Fetching sensor data history...');
+      
       const now = new Date();
       let startTime: Date;
 
@@ -236,16 +316,17 @@ export class SupabaseAPI {
         query = query.eq('device_id', deviceId);
       }
 
-      const { data, error } = await query;
+      const { data, error } = await this.withTimeout(query, 10000);
 
       if (error) {
-        console.error('Error fetching sensor history:', error);
+        console.error('❌ SupabaseAPI: Error fetching sensor history:', error);
         return [];
       }
 
+      console.log('✅ SupabaseAPI: Sensor history fetched:', data?.length || 0, 'records');
       return (data || []).map(item => this.transformSensorData(item));
     } catch (error) {
-      console.error('Error in getSensorDataHistory:', error);
+      console.error('❌ SupabaseAPI: Error in getSensorDataHistory:', error);
       return [];
     }
   }
@@ -269,6 +350,7 @@ export class SupabaseAPI {
   // Thresholds
   async getThresholds(deviceId?: string) {
     if (!isSupabaseConfigured()) {
+      console.log('🔧 SupabaseAPI: Not configured, returning empty thresholds');
       return [];
     }
     
@@ -282,14 +364,14 @@ export class SupabaseAPI {
         query = query.eq('device_id', deviceId);
       }
 
-      const { data, error } = await query;
+      const { data, error } = await this.withTimeout(query, 5000);
       if (error) {
-        console.error('Error fetching thresholds:', error);
+        console.error('❌ SupabaseAPI: Error fetching thresholds:', error);
         return [];
       }
       return data || [];
     } catch (error) {
-      console.error('Error in getThresholds:', error);
+      console.error('❌ SupabaseAPI: Error in getThresholds:', error);
       return [];
     }
   }
@@ -297,20 +379,22 @@ export class SupabaseAPI {
   async updateThreshold(deviceId: string, parameter: string, minValue?: number, maxValue?: number) {
     this.checkConfiguration();
     
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await this.withTimeout(supabase.auth.getUser());
     if (!user) throw new Error('Not authenticated');
 
-    const { data, error } = await supabase
-      .from('thresholds')
-      .upsert({
-        device_id: deviceId,
-        user_id: user.id,
-        parameter,
-        min_value: minValue,
-        max_value: maxValue,
-      })
-      .select()
-      .single();
+    const { data, error } = await this.withTimeout(
+      supabase
+        .from('thresholds')
+        .upsert({
+          device_id: deviceId,
+          user_id: user.id,
+          parameter,
+          min_value: minValue,
+          max_value: maxValue,
+        })
+        .select()
+        .single()
+    );
 
     if (error) throw error;
     return data;
@@ -319,6 +403,7 @@ export class SupabaseAPI {
   // Alerts
   async getAlerts(deviceId?: string, limit = 50) {
     if (!isSupabaseConfigured()) {
+      console.log('🔧 SupabaseAPI: Not configured, returning empty alerts');
       return [];
     }
     
@@ -333,14 +418,14 @@ export class SupabaseAPI {
         query = query.eq('device_id', deviceId);
       }
 
-      const { data, error } = await query;
+      const { data, error } = await this.withTimeout(query, 5000);
       if (error) {
-        console.error('Error fetching alerts:', error);
+        console.error('❌ SupabaseAPI: Error fetching alerts:', error);
         return [];
       }
       return data || [];
     } catch (error) {
-      console.error('Error in getAlerts:', error);
+      console.error('❌ SupabaseAPI: Error in getAlerts:', error);
       return [];
     }
   }
@@ -389,17 +474,19 @@ export class SupabaseAPI {
   async updateProfile(updates: { full_name?: string; phone?: string; farm_name?: string; location?: string }) {
     this.checkConfiguration();
     
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await this.withTimeout(supabase.auth.getUser());
     if (!user) throw new Error('Not authenticated');
 
-    const { data, error } = await supabase
-      .from('user_profiles')
-      .upsert({
-        id: user.id,
-        ...updates,
-      })
-      .select()
-      .single();
+    const { data, error } = await this.withTimeout(
+      supabase
+        .from('user_profiles')
+        .upsert({
+          id: user.id,
+          ...updates,
+        })
+        .select()
+        .single()
+    );
 
     if (error) throw error;
     return data;
