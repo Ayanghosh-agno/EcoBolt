@@ -11,7 +11,10 @@ import Layout from './components/Layout/Layout';
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isLoading } = useAuth();
 
+  console.log('🔒 PrivateRoute: isLoading:', isLoading, 'user:', user?.name || 'none');
+
   if (isLoading) {
+    console.log('⏳ PrivateRoute: Showing loading screen');
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
@@ -26,11 +29,28 @@ const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 };
 
 const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
+  
+  console.log('🌐 PublicRoute: isLoading:', isLoading, 'user:', user?.name || 'none');
+  
+  if (isLoading) {
+    console.log('⏳ PublicRoute: Showing loading screen');
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+  
   return user ? <Navigate to="/" /> : <>{children}</>;
 };
 
 const App: React.FC = () => {
+  console.log('🚀 App: Component rendered');
+  
   return (
     <AuthProvider>
       <Router>

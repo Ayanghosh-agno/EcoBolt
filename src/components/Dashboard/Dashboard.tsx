@@ -35,48 +35,59 @@ const Dashboard: React.FC = () => {
 
   const fetchSensorData = async () => {
     try {
+      console.log('📊 Dashboard: Fetching sensor data...');
       setError(null);
       const data = await api.getLatestSensorData();
+      console.log('✅ Dashboard: Sensor data fetched:', data ? 'success' : 'no data');
       setSensorData(data);
     } catch (error) {
-      console.error('Error fetching sensor data:', error);
+      console.error('❌ Dashboard: Error fetching sensor data:', error);
       setError('Failed to fetch sensor data');
     } finally {
       setLoading(false);
       setRefreshing(false);
+      console.log('✅ Dashboard: Sensor data loading complete');
     }
   };
 
   const checkDevices = async () => {
     try {
+      console.log('🔍 Dashboard: Checking devices...');
       if (!isSupabaseConfigured()) {
-        console.warn('Supabase not configured, skipping device check');
+        console.log('⚠️ Dashboard: Supabase not configured, skipping device check');
         setHasDevices(false);
         return;
       }
       
       const devices = await supabaseApi.getUserDevices();
+      console.log('📱 Dashboard: Found devices:', devices.length);
       setHasDevices(devices.length > 0);
     } catch (error) {
-      console.error('Error checking devices:', error);
+      console.error('❌ Dashboard: Error checking devices:', error);
       setHasDevices(false);
     } finally {
       setCheckingDevices(false);
+      console.log('✅ Dashboard: Device check complete');
     }
   };
 
   useEffect(() => {
+    console.log('🚀 Dashboard: Component mounted, initializing...');
+    
     const initializeDashboard = async () => {
       try {
-        // Check devices first
+        console.log('🔄 Dashboard: Starting initialization...');
+        
+        // Always fetch sensor data first (will use mock data if no real data available)
+        await fetchSensorData();
+        
+        // Check devices in parallel
         await checkDevices();
         
-        // Always fetch sensor data (will use mock data if no real data available)
-        await fetchSensorData();
+        console.log('✅ Dashboard: Initialization complete');
       } catch (error) {
-        console.error('Error initializing dashboard:', error);
+        console.error('❌ Dashboard: Error initializing dashboard:', error);
         setError('Failed to initialize dashboard');
-      } finally {
         setLoading(false);
         setCheckingDevices(false);
       }
@@ -85,17 +96,47 @@ const Dashboard: React.FC = () => {
     initializeDashboard();
     
     // Set up auto-refresh every 30 seconds
-    const interval = setInterval(fetchSensorData, 30000);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => {
+      console.log('🔄 Dashboard: Auto-refreshing sensor data...');
+      fetchSensorData();
+    }, 30000);
+    
+    return () => {
+      console.log('🧹 Dashboard: Cleanup');
+      clearInterval(interval);
+    };
   }, []);
 
   const handleRefresh = () => {
+    console.log('🔄 Dashboard: Manual refresh triggered');
     setRefreshing(true);
     fetchSensorData();
   };
 
-  // Show error state only if there's a critical error AND we're still loading
-  if (error && loading && checkingDevices) {
+  console.log('🎯 Dashboard: Current state - loading:', loading, 'checkingDevices:', checkingDevices, 'hasDevices:', hasDevices, 'sensorData:', !!sensorData);
+
+  // Show loading only while checking devices AND loading sensor data
+  if (checkingDevices && loading) {
+    console.log('⏳ Dashboard: Showing loading spinner');
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center px-4">
+        <div className="text-center">
+          <div className="relative">
+            <Loader2 className="h-16 w-16 animate-spin text-emerald-600 mx-auto mb-6" />
+            <div className="absolute inset-0 h-16 w-16 border-4 border-emerald-200 rounded-full mx-auto animate-pulse"></div>
+          </div>
+          <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 mb-2">Loading Dashboard</h2>
+          <p className="text-gray-600 text-sm sm:text-base">
+            {checkingDevices ? 'Checking your devices...' : 'Fetching real-time sensor data...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state only if there's a critical error
+  if (error && !sensorData) {
+    console.log('❌ Dashboard: Showing error state');
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center px-4">
         <div className="text-center max-w-md">
@@ -121,26 +162,9 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  // Show loading only while checking devices AND loading sensor data
-  if (checkingDevices || (loading && !sensorData)) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center px-4">
-        <div className="text-center">
-          <div className="relative">
-            <Loader2 className="h-16 w-16 animate-spin text-emerald-600 mx-auto mb-6" />
-            <div className="absolute inset-0 h-16 w-16 border-4 border-emerald-200 rounded-full mx-auto animate-pulse"></div>
-          </div>
-          <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 mb-2">Loading Dashboard</h2>
-          <p className="text-gray-600 text-sm sm:text-base">
-            {checkingDevices ? 'Checking your devices...' : 'Fetching real-time sensor data...'}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   // Show device setup message if no devices are configured and Supabase is configured
-  if (!hasDevices && isSupabaseConfigured()) {
+  if (!hasDevices && isSupabaseConfigured() && !loading) {
+    console.log('📱 Dashboard: Showing device setup screen');
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -205,6 +229,8 @@ const Dashboard: React.FC = () => {
       </div>
     );
   }
+
+  console.log('🎯 Dashboard: Rendering main dashboard');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-4 sm:py-8">

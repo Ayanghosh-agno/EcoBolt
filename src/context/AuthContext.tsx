@@ -31,12 +31,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     let mounted = true;
+    console.log('🔄 AuthProvider: Starting initialization...');
 
     const initializeAuth = async () => {
       try {
+        console.log('🔍 AuthProvider: Checking Supabase configuration...');
+        
         // Check if Supabase is configured
         if (!isSupabaseConfigured()) {
-          console.warn('Supabase not configured, using demo mode');
+          console.log('⚠️ AuthProvider: Supabase not configured, using demo mode');
           if (mounted) {
             setUser({
               id: 'demo-user',
@@ -47,45 +50,59 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               location: 'Demo Location',
             });
             setIsLoading(false);
+            console.log('✅ AuthProvider: Demo user set, loading complete');
           }
           return;
         }
 
+        console.log('🔍 AuthProvider: Getting initial session...');
         // Get initial session
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
-          console.error('Error getting session:', error);
+          console.error('❌ AuthProvider: Error getting session:', error);
           if (mounted) {
             setIsLoading(false);
           }
           return;
         }
         
+        console.log('📋 AuthProvider: Session data:', session?.user?.id ? 'User found' : 'No user');
+        
         if (session?.user && mounted) {
+          console.log('👤 AuthProvider: Getting user profile...');
           try {
             const currentUser = await supabaseApi.getCurrentUser();
             if (mounted) {
+              console.log('✅ AuthProvider: User profile loaded:', currentUser?.name);
               setUser(currentUser);
+              setIsLoading(false);
             }
           } catch (error) {
-            console.error('Error getting user profile:', error);
+            console.error('⚠️ AuthProvider: Error getting user profile, using fallback:', error);
             // If profile doesn't exist, user is still authenticated but needs profile setup
             if (mounted) {
-              setUser({
+              const fallbackUser = {
                 id: session.user.id,
                 email: session.user.email!,
                 name: session.user.user_metadata?.full_name || 'User',
                 phone: '',
                 farmName: '',
                 location: '',
-              });
+              };
+              console.log('✅ AuthProvider: Fallback user set:', fallbackUser.name);
+              setUser(fallbackUser);
+              setIsLoading(false);
             }
+          }
+        } else {
+          console.log('❌ AuthProvider: No session found, setting loading to false');
+          if (mounted) {
+            setIsLoading(false);
           }
         }
       } catch (error) {
-        console.error('Error in initializeAuth:', error);
-      } finally {
+        console.error('❌ AuthProvider: Error in initializeAuth:', error);
         if (mounted) {
           setIsLoading(false);
         }
@@ -98,35 +115,51 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     let subscription: any = null;
     
     if (isSupabaseConfigured()) {
+      console.log('🔗 AuthProvider: Setting up auth state listener...');
       // Listen for auth changes
       const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange(
         async (event, session) => {
-          console.log('Auth state changed:', event, session?.user?.id);
+          console.log('🔄 AuthProvider: Auth state changed:', event, session?.user?.id || 'no user');
           
-          if (!mounted) return;
+          if (!mounted) {
+            console.log('⚠️ AuthProvider: Component unmounted, ignoring auth change');
+            return;
+          }
           
           if (event === 'SIGNED_IN' && session?.user) {
+            console.log('✅ AuthProvider: User signed in, getting profile...');
             try {
               const currentUser = await supabaseApi.getCurrentUser();
+              console.log('✅ AuthProvider: Profile loaded after sign in:', currentUser?.name);
               setUser(currentUser);
             } catch (error) {
-              console.error('Error getting user after sign in:', error);
+              console.error('⚠️ AuthProvider: Error getting user after sign in, using fallback:', error);
               // Fallback to basic user info
-              setUser({
+              const fallbackUser = {
                 id: session.user.id,
                 email: session.user.email!,
                 name: session.user.user_metadata?.full_name || 'User',
                 phone: '',
                 farmName: '',
                 location: '',
-              });
+              };
+              console.log('✅ AuthProvider: Fallback user set after sign in:', fallbackUser.name);
+              setUser(fallbackUser);
             }
+            // Always set loading to false after handling sign in
+            console.log('✅ AuthProvider: Setting loading to false after sign in');
+            setIsLoading(false);
           } else if (event === 'SIGNED_OUT') {
+            console.log('👋 AuthProvider: User signed out');
             setUser(null);
+            setIsLoading(false);
+          } else if (event === 'TOKEN_REFRESHED') {
+            console.log('🔄 AuthProvider: Token refreshed');
+            // Don't change loading state for token refresh
+          } else {
+            console.log('🔄 AuthProvider: Other auth event, setting loading to false');
+            setIsLoading(false);
           }
-          
-          // Always set loading to false after auth state change
-          setIsLoading(false);
         }
       );
       
@@ -134,6 +167,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
 
     return () => {
+      console.log('🧹 AuthProvider: Cleanup');
       mounted = false;
       if (subscription) {
         subscription.unsubscribe();
@@ -143,7 +177,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
+      console.log('🔐 AuthProvider: Attempting login...');
       if (!isSupabaseConfigured()) {
+        console.log('🔐 AuthProvider: Demo mode login');
         // Demo mode login
         setUser({
           id: 'demo-user',
@@ -153,20 +189,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           farmName: 'Demo Farm',
           location: 'Demo Location',
         });
+        setIsLoading(false);
         return true;
       }
       
       await supabaseApi.signIn(email, password);
+      console.log('✅ AuthProvider: Login successful');
       return true;
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('❌ AuthProvider: Login error:', error);
+      setIsLoading(false);
       return false;
     }
   };
 
   const register = async (email: string, password: string, fullName: string): Promise<boolean> => {
     try {
+      console.log('📝 AuthProvider: Attempting registration...');
       if (!isSupabaseConfigured()) {
+        console.log('📝 AuthProvider: Demo mode registration');
         // Demo mode registration
         setUser({
           id: 'demo-user',
@@ -176,29 +217,36 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           farmName: '',
           location: '',
         });
+        setIsLoading(false);
         return true;
       }
       
       await supabaseApi.signUp(email, password, fullName);
+      console.log('✅ AuthProvider: Registration successful');
       return true;
     } catch (error) {
-      console.error('Registration error:', error);
+      console.error('❌ AuthProvider: Registration error:', error);
+      setIsLoading(false);
       return false;
     }
   };
 
   const logout = async (): Promise<void> => {
     try {
+      console.log('👋 AuthProvider: Attempting logout...');
       if (isSupabaseConfigured()) {
         await supabaseApi.signOut();
       } else {
         // Demo mode logout
         setUser(null);
       }
+      console.log('✅ AuthProvider: Logout successful');
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('❌ AuthProvider: Logout error:', error);
     }
   };
+
+  console.log('🎯 AuthProvider: Current state - isLoading:', isLoading, 'user:', user?.name || 'none');
 
   const value = {
     user,
