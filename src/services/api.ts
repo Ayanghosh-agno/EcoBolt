@@ -20,35 +20,73 @@ class EcoBoltAPI {
     };
   }
 
-  // Generate historical data for charts
+  // Generate historical data for charts with proper date distribution
   private generateHistoricalData(range: '24h' | '7d' | '30d'): SensorData[] {
     const data: SensorData[] = [];
-    let intervals = 24; // Default for 24h
-    let hoursBack = 24;
+    const now = new Date();
+    
+    let intervals: number;
+    let timeUnit: 'hours' | 'days';
+    let stepSize: number;
 
-    if (range === '7d') {
-      intervals = 7;
-      hoursBack = 7 * 24;
-    } else if (range === '30d') {
-      intervals = 30;
-      hoursBack = 30 * 24;
+    // Configure intervals based on time range
+    switch (range) {
+      case '24h':
+        intervals = 24; // 24 data points (hourly)
+        timeUnit = 'hours';
+        stepSize = 1;
+        break;
+      case '7d':
+        intervals = 14; // 14 data points (twice daily)
+        timeUnit = 'hours';
+        stepSize = 12; // Every 12 hours
+        break;
+      case '30d':
+        intervals = 30; // 30 data points (daily)
+        timeUnit = 'days';
+        stepSize = 1;
+        break;
+      default:
+        intervals = 24;
+        timeUnit = 'hours';
+        stepSize = 1;
     }
 
+    // Generate data points going backwards in time
     for (let i = intervals - 1; i >= 0; i--) {
-      const timestamp = new Date();
-      if (range === '24h') {
-        timestamp.setHours(timestamp.getHours() - i);
-      } else if (range === '7d') {
-        timestamp.setDate(timestamp.getDate() - i);
+      const timestamp = new Date(now);
+      
+      if (timeUnit === 'hours') {
+        timestamp.setHours(timestamp.getHours() - (i * stepSize));
       } else {
-        timestamp.setDate(timestamp.getDate() - i);
+        timestamp.setDate(timestamp.getDate() - (i * stepSize));
+        // Set to a consistent time of day for daily data
+        timestamp.setHours(12, 0, 0, 0);
       }
 
+      // Add some variation to sensor values based on time
+      const baseData = this.generateMockSensorData();
+      
+      // Add time-based variations (e.g., temperature cycles)
+      const hourOfDay = timestamp.getHours();
+      const tempVariation = Math.sin((hourOfDay / 24) * 2 * Math.PI) * 5; // ±5°C daily cycle
+      
       data.push({
-        ...this.generateMockSensorData(),
+        ...baseData,
         timestamp: timestamp.toISOString(),
+        atmoTemp: Math.round((baseData.atmoTemp + tempVariation) * 10) / 10,
+        // Add slight variations to other parameters too
+        humidity: Math.max(20, Math.min(90, baseData.humidity + (Math.random() - 0.5) * 10)),
+        light: Math.max(0, baseData.light + (Math.random() - 0.5) * 200),
       });
     }
+
+    console.log(`📊 Generated ${data.length} historical data points for ${range}:`, {
+      firstTimestamp: data[0]?.timestamp,
+      lastTimestamp: data[data.length - 1]?.timestamp,
+      range: range,
+      intervals: intervals
+    });
 
     return data;
   }
@@ -74,6 +112,7 @@ class EcoBoltAPI {
       // Try to get real data from Supabase first
       const realData = await supabaseApi.getLatestSensorData();
       if (realData) {
+        console.log('📊 API: Using real sensor data from Supabase');
         return realData;
       }
     } catch (error) {
@@ -81,6 +120,7 @@ class EcoBoltAPI {
     }
 
     // Fallback to mock data for demo
+    console.log('📊 API: Using mock sensor data');
     await new Promise(resolve => setTimeout(resolve, 500));
     return this.generateMockSensorData();
   }
@@ -90,6 +130,7 @@ class EcoBoltAPI {
       // Try to get real data from Supabase first
       const realData = await supabaseApi.getSensorDataHistory(range);
       if (realData && realData.length > 0) {
+        console.log(`📊 API: Using real sensor history from Supabase (${realData.length} records)`);
         return realData;
       }
     } catch (error) {
@@ -97,6 +138,7 @@ class EcoBoltAPI {
     }
 
     // Fallback to mock data for demo
+    console.log(`📊 API: Generating mock sensor history for ${range}`);
     await new Promise(resolve => setTimeout(resolve, 800));
     return this.generateHistoricalData(range);
   }
