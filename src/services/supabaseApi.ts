@@ -109,7 +109,7 @@ export class SupabaseAPI {
           }
 
           // Extract the first profile from the array (since we're not using .single())
-          const profile = profileData && profileData.length > 0 ? profileData[0] : null;
+          const profile = data && data.length > 0 ? data[0] : null;
           console.log('📋 SupabaseAPI: Profile extracted:', profile ? 'found' : 'not found');
 
           const userData = {
