@@ -26,7 +26,7 @@ DECLARE
 BEGIN
   -- Get webhook URL from environment (you can set this in Supabase dashboard)
   -- For now, we'll use the edge function URL
-  webhook_url := 'https://bwkuykrjycprxlcrzwwz.supabase.co/functions/v1/alert-webhook';
+  webhook_url := 'https://bwkuykrjycprxlcrzwwz.supabase.co/functions/v1/rapid-service';
   
   -- Get device information
   SELECT device_name, location, device_type 
