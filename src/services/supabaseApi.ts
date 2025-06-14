@@ -595,6 +595,8 @@ export class SupabaseAPI {
     }
     
     try {
+      console.log('🎯 SupabaseAPI: Fetching thresholds for device:', deviceId || 'all devices');
+      
       let query = supabase
         .from('thresholds')
         .select('*')
@@ -609,6 +611,8 @@ export class SupabaseAPI {
         console.error('❌ SupabaseAPI: Error fetching thresholds:', error);
         return [];
       }
+      
+      console.log('✅ SupabaseAPI: Thresholds fetched:', data?.length || 0);
       return data || [];
     } catch (error) {
       console.error('❌ SupabaseAPI: Error in getThresholds:', error);
@@ -619,23 +623,189 @@ export class SupabaseAPI {
   async updateThreshold(deviceId: string, parameter: string, minValue?: number, maxValue?: number) {
     this.checkConfiguration();
     
+    console.log('🎯 SupabaseAPI: Updating threshold:', { deviceId, parameter, minValue, maxValue });
+    
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
-    const { data, error } = await supabase
-      .from('thresholds')
-      .upsert({
+    try {
+      // First, check if threshold already exists
+      console.log('🔍 SupabaseAPI: Checking if threshold exists...');
+      const { data: existingThreshold, error: checkError } = await supabase
+        .from('thresholds')
+        .select('id')
+        .eq('device_id', deviceId)
+        .eq('parameter', parameter)
+        .eq('user_id', user.id)
+        .single();
+
+      if (checkError && checkError.code !== 'PGRST116') {
+        // PGRST116 means no rows found, which is expected for new thresholds
+        console.error('❌ SupabaseAPI: Error checking existing threshold:', checkError);
+        throw checkError;
+      }
+
+      const thresholdData = {
         device_id: deviceId,
         user_id: user.id,
         parameter,
-        min_value: minValue,
-        max_value: maxValue,
-      })
-      .select()
-      .single();
+        min_value: minValue ?? null,
+        max_value: maxValue ?? null,
+        alert_email: true,
+        alert_sms: false,
+        is_active: true,
+        updated_at: new Date().toISOString(),
+      };
 
-    if (error) throw error;
-    return data;
+      if (existingThreshold) {
+        // Update existing threshold
+        console.log('🔄 SupabaseAPI: Updating existing threshold...');
+        const { data, error } = await supabase
+          .from('thresholds')
+          .update(thresholdData)
+          .eq('device_id', deviceId)
+          .eq('parameter', parameter)
+          .eq('user_id', user.id)
+          .select()
+          .single();
+
+        if (error) {
+          console.error('❌ SupabaseAPI: Error updating threshold:', error);
+          throw error;
+        }
+
+        console.log('✅ SupabaseAPI: Threshold updated successfully');
+        return data;
+      } else {
+        // Insert new threshold
+        console.log('➕ SupabaseAPI: Inserting new threshold...');
+        const { data, error } = await supabase
+          .from('thresholds')
+          .insert({
+            ...thresholdData,
+            created_at: new Date().toISOString(),
+          })
+          .select()
+          .single();
+
+        if (error) {
+          console.error('❌ SupabaseAPI: Error inserting threshold:', error);
+          throw error;
+        }
+
+        console.log('✅ SupabaseAPI: Threshold inserted successfully');
+        return data;
+      }
+    } catch (error) {
+      console.error('❌ SupabaseAPI: Error in updateThreshold:', error);
+      throw error;
+    }
+  }
+
+  // Bulk threshold operations for better performance
+  async updateMultipleThresholds(deviceId: string, thresholds: Array<{
+    parameter: string;
+    minValue?: number;
+    maxValue?: number;
+  }>) {
+    this.checkConfiguration();
+    
+    console.log('🎯 SupabaseAPI: Updating multiple thresholds:', { deviceId, count: thresholds.length });
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Not authenticated');
+
+    try {
+      // Get all existing thresholds for this device
+      console.log('🔍 SupabaseAPI: Fetching existing thresholds...');
+      const { data: existingThresholds, error: fetchError } = await supabase
+        .from('thresholds')
+        .select('*')
+        .eq('device_id', deviceId)
+        .eq('user_id', user.id);
+
+      if (fetchError) {
+        console.error('❌ SupabaseAPI: Error fetching existing thresholds:', fetchError);
+        throw fetchError;
+      }
+
+      const existingMap = new Map(
+        (existingThresholds || []).map(t => [t.parameter, t])
+      );
+
+      const updates: any[] = [];
+      const inserts: any[] = [];
+
+      // Process each threshold
+      for (const threshold of thresholds) {
+        const thresholdData = {
+          device_id: deviceId,
+          user_id: user.id,
+          parameter: threshold.parameter,
+          min_value: threshold.minValue ?? null,
+          max_value: threshold.maxValue ?? null,
+          alert_email: true,
+          alert_sms: false,
+          is_active: true,
+          updated_at: new Date().toISOString(),
+        };
+
+        if (existingMap.has(threshold.parameter)) {
+          // Update existing
+          updates.push({
+            ...thresholdData,
+            id: existingMap.get(threshold.parameter)!.id,
+          });
+        } else {
+          // Insert new
+          inserts.push({
+            ...thresholdData,
+            created_at: new Date().toISOString(),
+          });
+        }
+      }
+
+      // Perform batch operations
+      const results = [];
+
+      if (updates.length > 0) {
+        console.log(`🔄 SupabaseAPI: Updating ${updates.length} existing thresholds...`);
+        for (const update of updates) {
+          const { data, error } = await supabase
+            .from('thresholds')
+            .update(update)
+            .eq('id', update.id)
+            .select()
+            .single();
+
+          if (error) {
+            console.error('❌ SupabaseAPI: Error updating threshold:', error);
+            throw error;
+          }
+          results.push(data);
+        }
+      }
+
+      if (inserts.length > 0) {
+        console.log(`➕ SupabaseAPI: Inserting ${inserts.length} new thresholds...`);
+        const { data, error } = await supabase
+          .from('thresholds')
+          .insert(inserts)
+          .select();
+
+        if (error) {
+          console.error('❌ SupabaseAPI: Error inserting thresholds:', error);
+          throw error;
+        }
+        results.push(...(data || []));
+      }
+
+      console.log('✅ SupabaseAPI: Multiple thresholds updated successfully');
+      return results;
+    } catch (error) {
+      console.error('❌ SupabaseAPI: Error in updateMultipleThresholds:', error);
+      throw error;
+    }
   }
 
   // Alerts

@@ -10,7 +10,8 @@ import {
   Sliders,
   AlertTriangle,
   CheckCircle,
-  Smartphone
+  Smartphone,
+  RefreshCw
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { supabaseApi } from '../../services/supabaseApi';
@@ -50,6 +51,7 @@ const Settings: React.FC = () => {
   const [selectedDevice, setSelectedDevice] = useState<string>('');
   const [thresholds, setThresholds] = useState<Threshold[]>([]);
   const [thresholdsLoading, setThresholdsLoading] = useState(false);
+  const [thresholdsSaving, setThresholdsSaving] = useState<string>(''); // Track which threshold is being saved
   const [thresholdsSuccess, setThresholdsSuccess] = useState('');
   const [error, setError] = useState('');
 
@@ -79,13 +81,15 @@ const Settings: React.FC = () => {
 
   const fetchDevices = async () => {
     try {
+      console.log('🔍 Settings: Fetching devices...');
       const deviceData = await supabaseApi.getUserDevices();
+      console.log('✅ Settings: Devices fetched:', deviceData.length);
       setDevices(deviceData);
       if (deviceData.length > 0) {
         setSelectedDevice(deviceData[0].device_id);
       }
     } catch (error) {
-      console.error('Error fetching devices:', error);
+      console.error('❌ Settings: Error fetching devices:', error);
       setError('Failed to load devices');
     }
   };
@@ -93,12 +97,16 @@ const Settings: React.FC = () => {
   const fetchThresholds = async () => {
     if (!selectedDevice) return;
     
+    console.log('🎯 Settings: Fetching thresholds for device:', selectedDevice);
     setThresholdsLoading(true);
+    setError('');
+    
     try {
       const thresholdData = await supabaseApi.getThresholds(selectedDevice);
+      console.log('✅ Settings: Thresholds fetched:', thresholdData.length);
       setThresholds(thresholdData);
     } catch (error) {
-      console.error('Error fetching thresholds:', error);
+      console.error('❌ Settings: Error fetching thresholds:', error);
       setError('Failed to load thresholds');
     } finally {
       setThresholdsLoading(false);
@@ -116,7 +124,7 @@ const Settings: React.FC = () => {
       setProfileSuccess(true);
       setTimeout(() => setProfileSuccess(false), 3000);
     } catch (error) {
-      console.error('Error updating profile:', error);
+      console.error('❌ Settings: Error updating profile:', error);
       setError('Failed to update profile');
     } finally {
       setProfileLoading(false);
@@ -136,7 +144,7 @@ const Settings: React.FC = () => {
       return type === 'min' ? (threshold.min_value || 0) : (threshold.max_value || 0);
     }
     
-    // Return default values
+    // Return default values if no threshold exists
     const paramDef = thresholdParameters.find(p => p.key === parameter);
     return type === 'min' ? (paramDef?.defaultMin || 0) : (paramDef?.defaultMax || 0);
   };
@@ -144,14 +152,26 @@ const Settings: React.FC = () => {
   const updateThreshold = async (parameter: string, minValue: number, maxValue: number) => {
     if (!selectedDevice) return;
 
+    console.log('🎯 Settings: Updating threshold:', { parameter, minValue, maxValue });
+    setThresholdsSaving(parameter);
+    setError('');
+
     try {
+      // Use the improved updateThreshold method that handles insert/update logic
       await supabaseApi.updateThreshold(selectedDevice, parameter, minValue, maxValue);
+      
       setThresholdsSuccess(`Updated ${parameter} threshold successfully`);
       setTimeout(() => setThresholdsSuccess(''), 3000);
-      await fetchThresholds(); // Refresh thresholds
+      
+      // Refresh thresholds to get the latest data
+      await fetchThresholds();
+      
+      console.log('✅ Settings: Threshold updated successfully');
     } catch (error) {
-      console.error('Error updating threshold:', error);
-      setError(`Failed to update ${parameter} threshold`);
+      console.error('❌ Settings: Error updating threshold:', error);
+      setError(`Failed to update ${parameter} threshold: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setThresholdsSaving('');
     }
   };
 
@@ -168,6 +188,41 @@ const Settings: React.FC = () => {
     // Validate that min <= max
     if (newMin <= newMax) {
       updateThreshold(parameter, newMin, newMax);
+    } else {
+      setError(`Minimum value cannot be greater than maximum value for ${parameter}`);
+      setTimeout(() => setError(''), 3000);
+    }
+  };
+
+  // Bulk save all thresholds with default values
+  const initializeDefaultThresholds = async () => {
+    if (!selectedDevice) return;
+
+    console.log('🎯 Settings: Initializing default thresholds...');
+    setThresholdsLoading(true);
+    setError('');
+
+    try {
+      const thresholdUpdates = thresholdParameters.map(param => ({
+        parameter: param.key,
+        minValue: param.defaultMin,
+        maxValue: param.defaultMax,
+      }));
+
+      await supabaseApi.updateMultipleThresholds(selectedDevice, thresholdUpdates);
+      
+      setThresholdsSuccess('Default thresholds initialized successfully');
+      setTimeout(() => setThresholdsSuccess(''), 3000);
+      
+      // Refresh thresholds
+      await fetchThresholds();
+      
+      console.log('✅ Settings: Default thresholds initialized');
+    } catch (error) {
+      console.error('❌ Settings: Error initializing default thresholds:', error);
+      setError(`Failed to initialize default thresholds: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setThresholdsLoading(false);
     }
   };
 
@@ -217,15 +272,15 @@ const Settings: React.FC = () => {
           {/* Messages */}
           {error && (
             <div className="mx-4 sm:mx-6 mt-4 bg-red-50 border border-red-200 rounded-lg p-4 flex items-center">
-              <AlertTriangle className="h-5 w-5 text-red-500 mr-2" />
-              <p className="text-red-600">{error}</p>
+              <AlertTriangle className="h-5 w-5 text-red-500 mr-2 flex-shrink-0" />
+              <p className="text-red-600 text-sm">{error}</p>
             </div>
           )}
 
           {(profileSuccess || thresholdsSuccess) && (
             <div className="mx-4 sm:mx-6 mt-4 bg-green-50 border border-green-200 rounded-lg p-4 flex items-center">
-              <CheckCircle className="h-5 w-5 text-green-500 mr-2" />
-              <p className="text-green-600">{profileSuccess ? 'Profile updated successfully!' : thresholdsSuccess}</p>
+              <CheckCircle className="h-5 w-5 text-green-500 mr-2 flex-shrink-0" />
+              <p className="text-green-600 text-sm">{profileSuccess ? 'Profile updated successfully!' : thresholdsSuccess}</p>
             </div>
           )}
 
@@ -323,25 +378,47 @@ const Settings: React.FC = () => {
                 {/* Device Selection */}
                 {devices.length > 0 ? (
                   <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Select Device
-                      </label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <Smartphone className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" />
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+                      <div className="flex-1">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Select Device
+                        </label>
+                        <div className="relative max-w-md">
+                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <Smartphone className="h-4 w-4 sm:h-5 sm:w-5 text-gray-400" />
+                          </div>
+                          <select
+                            value={selectedDevice}
+                            onChange={(e) => setSelectedDevice(e.target.value)}
+                            className="block w-full pl-9 sm:pl-10 pr-3 py-2 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 text-sm sm:text-base"
+                          >
+                            {devices.map((device) => (
+                              <option key={device.id} value={device.device_id}>
+                                {device.device_name} ({device.device_id})
+                              </option>
+                            ))}
+                          </select>
                         </div>
-                        <select
-                          value={selectedDevice}
-                          onChange={(e) => setSelectedDevice(e.target.value)}
-                          className="block w-full pl-9 sm:pl-10 pr-3 py-2 sm:py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all duration-200 text-sm sm:text-base"
+                      </div>
+                      
+                      <div className="flex space-x-3">
+                        <button
+                          onClick={fetchThresholds}
+                          disabled={thresholdsLoading}
+                          className="flex items-center px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 disabled:opacity-50 transition-all duration-200 text-sm"
                         >
-                          {devices.map((device) => (
-                            <option key={device.id} value={device.device_id}>
-                              {device.device_name} ({device.device_id})
-                            </option>
-                          ))}
-                        </select>
+                          <RefreshCw className={`h-4 w-4 mr-2 ${thresholdsLoading ? 'animate-spin' : ''}`} />
+                          Refresh
+                        </button>
+                        
+                        <button
+                          onClick={initializeDefaultThresholds}
+                          disabled={thresholdsLoading}
+                          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 transition-all duration-200 text-sm"
+                        >
+                          <Sliders className="h-4 w-4 mr-2" />
+                          Set Defaults
+                        </button>
                       </div>
                     </div>
 
@@ -351,21 +428,30 @@ const Settings: React.FC = () => {
                         <h3 className="text-lg font-medium text-gray-900 mb-4">Sensor Thresholds</h3>
                         <p className="text-sm text-gray-600 mb-6">
                           Configure alert thresholds for your sensor parameters. You'll receive notifications when values go outside these ranges.
+                          Changes are saved automatically when you modify the values.
                         </p>
 
                         {thresholdsLoading ? (
                           <div className="flex items-center justify-center py-8">
-                            <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+                            <Loader2 className="h-6 w-6 animate-spin text-emerald-600 mr-2" />
+                            <span className="text-gray-600">Loading thresholds...</span>
                           </div>
                         ) : (
                           <div className="space-y-4">
                             {thresholdParameters.map((param) => (
-                              <div key={param.key} className="bg-gray-50 rounded-lg p-4">
+                              <div key={param.key} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3">
                                   <div>
                                     <h4 className="font-medium text-gray-900">{param.label}</h4>
                                     <p className="text-sm text-gray-500">Unit: {param.unit || 'N/A'}</p>
                                   </div>
+                                  
+                                  {thresholdsSaving === param.key && (
+                                    <div className="flex items-center text-sm text-blue-600 mt-2 sm:mt-0">
+                                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                                      Saving...
+                                    </div>
+                                  )}
                                 </div>
                                 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -378,7 +464,9 @@ const Settings: React.FC = () => {
                                       step="0.1"
                                       value={getThresholdValue(param.key, 'min')}
                                       onChange={(e) => handleThresholdChange(param.key, 'min', e.target.value)}
-                                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
+                                      disabled={thresholdsSaving === param.key}
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                      placeholder={`Default: ${param.defaultMin}`}
                                     />
                                   </div>
                                   
@@ -391,9 +479,15 @@ const Settings: React.FC = () => {
                                       step="0.1"
                                       value={getThresholdValue(param.key, 'max')}
                                       onChange={(e) => handleThresholdChange(param.key, 'max', e.target.value)}
-                                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
+                                      disabled={thresholdsSaving === param.key}
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                      placeholder={`Default: ${param.defaultMax}`}
                                     />
                                   </div>
+                                </div>
+                                
+                                <div className="mt-2 text-xs text-gray-500">
+                                  Default range: {param.defaultMin} - {param.defaultMax} {param.unit}
                                 </div>
                               </div>
                             ))}
@@ -409,6 +503,13 @@ const Settings: React.FC = () => {
                     <p className="text-gray-600">
                       You need to add a device first before configuring thresholds.
                     </p>
+                    <button
+                      onClick={() => window.location.href = '/devices'}
+                      className="mt-4 inline-flex items-center px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200"
+                    >
+                      <Smartphone className="h-4 w-4 mr-2" />
+                      Go to Device Management
+                    </button>
                   </div>
                 )}
               </div>
