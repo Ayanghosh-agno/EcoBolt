@@ -11,7 +11,8 @@ import {
   BarChart3,
   Sparkles,
   Brain,
-  Plus
+  Plus,
+  AlertTriangle
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import SensorCard from './SensorCard';
@@ -22,6 +23,7 @@ import AIRecommendations from './AIRecommendations';
 import { SensorData } from '../../types';
 import { api } from '../../services/api';
 import { supabaseApi } from '../../services/supabaseApi';
+import { isSupabaseConfigured } from '../../lib/supabase';
 
 const Dashboard: React.FC = () => {
   const [sensorData, setSensorData] = useState<SensorData | null>(null);
@@ -29,13 +31,16 @@ const Dashboard: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [hasDevices, setHasDevices] = useState(false);
   const [checkingDevices, setCheckingDevices] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchSensorData = async () => {
     try {
+      setError(null);
       const data = await api.getLatestSensorData();
       setSensorData(data);
     } catch (error) {
       console.error('Error fetching sensor data:', error);
+      setError('Failed to fetch sensor data');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -44,6 +49,12 @@ const Dashboard: React.FC = () => {
 
   const checkDevices = async () => {
     try {
+      if (!isSupabaseConfigured()) {
+        console.warn('Supabase not configured, skipping device check');
+        setHasDevices(false);
+        return;
+      }
+      
       const devices = await supabaseApi.getUserDevices();
       setHasDevices(devices.length > 0);
     } catch (error) {
@@ -56,8 +67,15 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     const initializeDashboard = async () => {
-      await checkDevices();
-      await fetchSensorData();
+      try {
+        await checkDevices();
+        await fetchSensorData();
+      } catch (error) {
+        console.error('Error initializing dashboard:', error);
+        setError('Failed to initialize dashboard');
+        setLoading(false);
+        setCheckingDevices(false);
+      }
     };
 
     initializeDashboard();
@@ -71,6 +89,33 @@ const Dashboard: React.FC = () => {
     setRefreshing(true);
     fetchSensorData();
   };
+
+  // Show error state if there's a critical error
+  if (error && loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center px-4">
+        <div className="text-center max-w-md">
+          <AlertTriangle className="h-16 w-16 text-red-500 mx-auto mb-6" />
+          <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 mb-2">Configuration Error</h2>
+          <p className="text-gray-600 text-sm sm:text-base mb-6">{error}</p>
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-left">
+            <h3 className="font-medium text-yellow-800 mb-2">Setup Required:</h3>
+            <ol className="text-sm text-yellow-700 space-y-1">
+              <li>1. Create a Supabase project</li>
+              <li>2. Add your Supabase URL and API key to .env</li>
+              <li>3. Run the database migrations</li>
+            </ol>
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors duration-200"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (checkingDevices || loading) {
     return (
@@ -89,8 +134,8 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  // Show device setup message if no devices are configured
-  if (!hasDevices) {
+  // Show device setup message if no devices are configured and Supabase is configured
+  if (!hasDevices && isSupabaseConfigured()) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -171,7 +216,7 @@ const Dashboard: React.FC = () => {
               </h1>
               <p className="text-gray-600 mt-1 flex items-center text-sm sm:text-base">
                 <Sparkles className="h-3 w-3 sm:h-4 sm:w-4 mr-1 text-emerald-500" />
-                Real-time agricultural monitoring
+                {isSupabaseConfigured() ? 'Real-time agricultural monitoring' : 'Demo agricultural monitoring'}
               </p>
             </div>
           </div>
@@ -193,6 +238,18 @@ const Dashboard: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Configuration Warning */}
+        {!isSupabaseConfigured() && (
+          <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <AlertTriangle className="h-5 w-5 text-yellow-500 mr-2" />
+              <p className="text-yellow-700 font-medium">
+                Demo Mode: Supabase not configured. Showing mock data only.
+              </p>
+            </div>
+          </div>
+        )}
 
         {sensorData && (
           <>

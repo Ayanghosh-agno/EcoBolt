@@ -30,32 +30,48 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    let mounted = true;
+
     // Get initial session
     const getInitialSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error } = await supabase.auth.getSession();
         
-        if (session?.user) {
+        if (error) {
+          console.error('Error getting session:', error);
+          if (mounted) {
+            setIsLoading(false);
+          }
+          return;
+        }
+        
+        if (session?.user && mounted) {
           try {
             const currentUser = await supabaseApi.getCurrentUser();
-            setUser(currentUser);
+            if (mounted) {
+              setUser(currentUser);
+            }
           } catch (error) {
             console.error('Error getting user profile:', error);
             // If profile doesn't exist, user is still authenticated but needs profile setup
-            setUser({
-              id: session.user.id,
-              email: session.user.email!,
-              name: session.user.user_metadata?.full_name || '',
-              phone: '',
-              farmName: '',
-              location: '',
-            });
+            if (mounted) {
+              setUser({
+                id: session.user.id,
+                email: session.user.email!,
+                name: session.user.user_metadata?.full_name || '',
+                phone: '',
+                farmName: '',
+                location: '',
+              });
+            }
           }
         }
       } catch (error) {
-        console.error('Error getting initial session:', error);
+        console.error('Error in getInitialSession:', error);
       } finally {
-        setIsLoading(false);
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
     };
 
@@ -65,6 +81,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event, session?.user?.id);
+        
+        if (!mounted) return;
         
         if (event === 'SIGNED_IN' && session?.user) {
           try {
@@ -92,7 +110,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {

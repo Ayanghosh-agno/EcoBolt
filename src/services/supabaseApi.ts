@@ -1,9 +1,18 @@
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { SensorData, User } from '../types';
 
 export class SupabaseAPI {
+  // Check if Supabase is properly configured
+  private checkConfiguration() {
+    if (!isSupabaseConfigured()) {
+      throw new Error('Supabase is not properly configured. Please check your environment variables.');
+    }
+  }
+
   // Authentication
   async signUp(email: string, password: string, fullName: string) {
+    this.checkConfiguration();
+    
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -41,6 +50,8 @@ export class SupabaseAPI {
   }
 
   async signIn(email: string, password: string) {
+    this.checkConfiguration();
+    
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -51,11 +62,18 @@ export class SupabaseAPI {
   }
 
   async signOut() {
+    this.checkConfiguration();
+    
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   }
 
   async getCurrentUser(): Promise<User | null> {
+    if (!isSupabaseConfigured()) {
+      // Return null if not configured instead of throwing
+      return null;
+    }
+    
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) return null;
@@ -84,16 +102,25 @@ export class SupabaseAPI {
 
   // Device Management
   async getUserDevices() {
+    if (!isSupabaseConfigured()) {
+      return [];
+    }
+    
     const { data, error } = await supabase
       .from('devices')
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error fetching devices:', error);
+      return [];
+    }
     return data || [];
   }
 
   async addDevice(deviceId: string, deviceName: string, location?: string) {
+    this.checkConfiguration();
+    
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
@@ -113,6 +140,8 @@ export class SupabaseAPI {
   }
 
   async updateDevice(deviceId: string, updates: { device_name?: string; location?: string; is_active?: boolean }) {
+    this.checkConfiguration();
+    
     const { data, error } = await supabase
       .from('devices')
       .update(updates)
@@ -125,6 +154,8 @@ export class SupabaseAPI {
   }
 
   async deleteDevice(deviceId: string) {
+    this.checkConfiguration();
+    
     const { error } = await supabase
       .from('devices')
       .delete()
@@ -135,6 +166,10 @@ export class SupabaseAPI {
 
   // Sensor Data
   async getLatestSensorData(deviceId?: string): Promise<SensorData | null> {
+    if (!isSupabaseConfigured()) {
+      return null;
+    }
+    
     let query = supabase
       .from('sensor_data')
       .select('*')
@@ -160,6 +195,10 @@ export class SupabaseAPI {
   }
 
   async getSensorDataHistory(timeRange: '24h' | '7d' | '30d', deviceId?: string): Promise<SensorData[]> {
+    if (!isSupabaseConfigured()) {
+      return [];
+    }
+    
     const now = new Date();
     let startTime: Date;
 
@@ -213,6 +252,10 @@ export class SupabaseAPI {
 
   // Thresholds
   async getThresholds(deviceId?: string) {
+    if (!isSupabaseConfigured()) {
+      return [];
+    }
+    
     let query = supabase
       .from('thresholds')
       .select('*')
@@ -223,11 +266,16 @@ export class SupabaseAPI {
     }
 
     const { data, error } = await query;
-    if (error) throw error;
+    if (error) {
+      console.error('Error fetching thresholds:', error);
+      return [];
+    }
     return data || [];
   }
 
   async updateThreshold(deviceId: string, parameter: string, minValue?: number, maxValue?: number) {
+    this.checkConfiguration();
+    
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
@@ -249,6 +297,10 @@ export class SupabaseAPI {
 
   // Alerts
   async getAlerts(deviceId?: string, limit = 50) {
+    if (!isSupabaseConfigured()) {
+      return [];
+    }
+    
     let query = supabase
       .from('alerts')
       .select('*')
@@ -260,12 +312,19 @@ export class SupabaseAPI {
     }
 
     const { data, error } = await query;
-    if (error) throw error;
+    if (error) {
+      console.error('Error fetching alerts:', error);
+      return [];
+    }
     return data || [];
   }
 
   // Real-time subscriptions
   subscribeToSensorData(deviceId: string, callback: (data: any) => void) {
+    if (!isSupabaseConfigured()) {
+      return { unsubscribe: () => {} };
+    }
+    
     return supabase
       .channel(`sensor_data:${deviceId}`)
       .on(
@@ -282,6 +341,10 @@ export class SupabaseAPI {
   }
 
   subscribeToAlerts(callback: (data: any) => void) {
+    if (!isSupabaseConfigured()) {
+      return { unsubscribe: () => {} };
+    }
+    
     return supabase
       .channel('alerts')
       .on(
@@ -298,6 +361,8 @@ export class SupabaseAPI {
 
   // Profile Management
   async updateProfile(updates: { full_name?: string; phone?: string; farm_name?: string; location?: string }) {
+    this.checkConfiguration();
+    
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
