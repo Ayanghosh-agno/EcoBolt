@@ -9,45 +9,31 @@ export class SupabaseAPI {
     }
   }
 
-  // Add timeout wrapper for async operations - increased default from 5000 to 10000
-  private async withTimeout<T>(promise: Promise<T>, timeoutMs: number = 10000): Promise<T> {
-    return Promise.race([
-      promise,
-      new Promise<T>((_, reject) => 
-        setTimeout(() => reject(new Error('Operation timed out')), timeoutMs)
-      )
-    ]);
-  }
-
   // Authentication
   async signUp(email: string, password: string, fullName: string) {
     this.checkConfiguration();
     
-    const { data, error } = await this.withTimeout(
-      supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-          },
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
         },
-      })
-    );
+      },
+    });
 
     if (error) throw error;
 
     // Create user profile if user was created
     if (data.user) {
       try {
-        const { error: profileError } = await this.withTimeout(
-          supabase
-            .from('user_profiles')
-            .insert({
-              id: data.user.id,
-              full_name: fullName,
-            })
-        );
+        const { error: profileError } = await supabase
+          .from('user_profiles')
+          .insert({
+            id: data.user.id,
+            full_name: fullName,
+          });
 
         if (profileError && profileError.code !== '23505') {
           // 23505 is unique violation, which means profile already exists
@@ -64,12 +50,10 @@ export class SupabaseAPI {
   async signIn(email: string, password: string) {
     this.checkConfiguration();
     
-    const { data, error } = await this.withTimeout(
-      supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-    );
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
     if (error) throw error;
     return data;
@@ -78,7 +62,7 @@ export class SupabaseAPI {
   async signOut() {
     this.checkConfiguration();
     
-    const { error } = await this.withTimeout(supabase.auth.signOut());
+    const { error } = await supabase.auth.signOut();
     if (error) throw error;
   }
 
@@ -96,13 +80,10 @@ export class SupabaseAPI {
         console.log('📋 SupabaseAPI: Using provided user data, fetching profile...');
         
         try {
-          const { data, error } = await this.withTimeout(
-            supabase
-              .from('user_profiles')
-              .select('*')
-              .eq('id', userId),
-            20000
-          );
+          const { data, error } = await supabase
+            .from('user_profiles')
+            .select('*')
+            .eq('id', userId);
 
           if (error && error.code !== 'PGRST116') {
             console.error('⚠️ SupabaseAPI: Error fetching user profile:', error);
@@ -145,10 +126,7 @@ export class SupabaseAPI {
       console.log('🔄 SupabaseAPI: No userId provided, falling back to session check...');
       
       // First, try to get the session which is faster and more reliable
-      const { data: { session }, error: sessionError } = await this.withTimeout(
-        supabase.auth.getSession(),
-        10000 // shorter timeout for session check
-      );
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
       if (sessionError) {
         console.error('❌ SupabaseAPI: Session error:', sessionError);
@@ -165,18 +143,13 @@ export class SupabaseAPI {
 
       console.log('📋 SupabaseAPI: Fetching user profile...');
       
-      // Try to get user profile with timeout
+      // Try to get user profile without timeout wrapper
       try {
-        const { data: profile, error } = await this.withTimeout(
-          supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('id', user.id)
-            .single(),
-          8000
-        );
-
-        
+        const { data: profile, error } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
 
         if (error && error.code !== 'PGRST116') {
           console.error('⚠️ SupabaseAPI: Error fetching user profile:', error);
@@ -226,13 +199,10 @@ export class SupabaseAPI {
     try {
       console.log('📱 SupabaseAPI: Fetching user devices...');
       
-      const { data, error } = await this.withTimeout(
-        supabase
-          .from('devices')
-          .select('*')
-          .order('created_at', { ascending: false }),
-        5000
-      );
+      const { data, error } = await supabase
+        .from('devices')
+        .select('*')
+        .order('created_at', { ascending: false });
 
       if (error) {
         console.error('❌ SupabaseAPI: Error fetching devices:', error);
@@ -250,21 +220,19 @@ export class SupabaseAPI {
   async addDevice(deviceId: string, deviceName: string, location?: string) {
     this.checkConfiguration();
     
-    const { data: { user } } = await this.withTimeout(supabase.auth.getUser());
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
-    const { data, error } = await this.withTimeout(
-      supabase
-        .from('devices')
-        .insert({
-          device_id: deviceId,
-          user_id: user.id,
-          device_name: deviceName,
-          location,
-        })
-        .select()
-        .single()
-    );
+    const { data, error } = await supabase
+      .from('devices')
+      .insert({
+        device_id: deviceId,
+        user_id: user.id,
+        device_name: deviceName,
+        location,
+      })
+      .select()
+      .single();
 
     if (error) throw error;
     return data;
@@ -273,14 +241,12 @@ export class SupabaseAPI {
   async updateDevice(deviceId: string, updates: { device_name?: string; location?: string; is_active?: boolean }) {
     this.checkConfiguration();
     
-    const { data, error } = await this.withTimeout(
-      supabase
-        .from('devices')
-        .update(updates)
-        .eq('device_id', deviceId)
-        .select()
-        .single()
-    );
+    const { data, error } = await supabase
+      .from('devices')
+      .update(updates)
+      .eq('device_id', deviceId)
+      .select()
+      .single();
 
     if (error) throw error;
     return data;
@@ -289,12 +255,10 @@ export class SupabaseAPI {
   async deleteDevice(deviceId: string) {
     this.checkConfiguration();
     
-    const { error } = await this.withTimeout(
-      supabase
-        .from('devices')
-        .delete()
-        .eq('device_id', deviceId)
-    );
+    const { error } = await supabase
+      .from('devices')
+      .delete()
+      .eq('device_id', deviceId);
 
     if (error) throw error;
   }
@@ -319,7 +283,7 @@ export class SupabaseAPI {
         query = query.eq('device_id', deviceId);
       }
 
-      const { data, error } = await this.withTimeout(query, 5000);
+      const { data, error } = await query;
 
       if (error) {
         console.error('❌ SupabaseAPI: Error fetching sensor data:', error);
@@ -373,7 +337,7 @@ export class SupabaseAPI {
         query = query.eq('device_id', deviceId);
       }
 
-      const { data, error } = await this.withTimeout(query, 10000);
+      const { data, error } = await query;
 
       if (error) {
         console.error('❌ SupabaseAPI: Error fetching sensor history:', error);
@@ -421,7 +385,7 @@ export class SupabaseAPI {
         query = query.eq('device_id', deviceId);
       }
 
-      const { data, error } = await this.withTimeout(query, 5000);
+      const { data, error } = await query;
       if (error) {
         console.error('❌ SupabaseAPI: Error fetching thresholds:', error);
         return [];
@@ -436,22 +400,20 @@ export class SupabaseAPI {
   async updateThreshold(deviceId: string, parameter: string, minValue?: number, maxValue?: number) {
     this.checkConfiguration();
     
-    const { data: { user } } = await this.withTimeout(supabase.auth.getUser());
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
-    const { data, error } = await this.withTimeout(
-      supabase
-        .from('thresholds')
-        .upsert({
-          device_id: deviceId,
-          user_id: user.id,
-          parameter,
-          min_value: minValue,
-          max_value: maxValue,
-        })
-        .select()
-        .single()
-    );
+    const { data, error } = await supabase
+      .from('thresholds')
+      .upsert({
+        device_id: deviceId,
+        user_id: user.id,
+        parameter,
+        min_value: minValue,
+        max_value: maxValue,
+      })
+      .select()
+      .single();
 
     if (error) throw error;
     return data;
@@ -475,7 +437,7 @@ export class SupabaseAPI {
         query = query.eq('device_id', deviceId);
       }
 
-      const { data, error } = await this.withTimeout(query, 5000);
+      const { data, error } = await query;
       if (error) {
         console.error('❌ SupabaseAPI: Error fetching alerts:', error);
         return [];
@@ -531,19 +493,17 @@ export class SupabaseAPI {
   async updateProfile(updates: { full_name?: string; phone?: string; farm_name?: string; location?: string }) {
     this.checkConfiguration();
     
-    const { data: { user } } = await this.withTimeout(supabase.auth.getUser());
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
-    const { data, error } = await this.withTimeout(
-      supabase
-        .from('user_profiles')
-        .upsert({
-          id: user.id,
-          ...updates,
-        })
-        .select()
-        .single()
-    );
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .upsert({
+        id: user.id,
+        ...updates,
+      })
+      .select()
+      .single();
 
     if (error) throw error;
     return data;
