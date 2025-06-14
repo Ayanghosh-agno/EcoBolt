@@ -399,27 +399,11 @@ const Dashboard: React.FC = () => {
             </div>
 
             {/* Control Panel - Only Appliance Control */}
-            <div className="grid grid-cols-1 gap-4 sm:gap-6 mb-8">
+            <div className="grid grid-cols-1 gap-4 sm:gap-6">
               <ApplianceControl />
             </div>
           </>
         )}
-
-        {/* Powered by Bolt.new Logo */}
-        <div className="mt-8 text-center">
-          <a
-            href="https://bolt.new/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-block transition-all duration-300 hover:scale-105 hover:opacity-80"
-          >
-            <img
-              src="/logotext_poweredby_360w.png"
-              alt="Powered by Bolt.new"
-              className="mx-auto h-6 sm:h-8 opacity-70 hover:opacity-100 transition-opacity duration-300"
-            />
-          </a>
-        </div>
       </div>
     </div>
   );

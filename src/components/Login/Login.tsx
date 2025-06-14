@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Leaf, Mail, Lock, Loader2, User } from 'lucide-react';
+import BoltLogo from '../Layout/BoltLogo';
 
 const Login: React.FC = () => {
   const [isLoginMode, setIsLoginMode] = useState(true);
@@ -162,6 +163,8 @@ const Login: React.FC = () => {
           </div>
         </div>
       </div>
+      
+      <BoltLogo />
     </div>
   );
 };
