@@ -19,14 +19,36 @@ export const supabase = createClient(
       persistSession: true,
       autoRefreshToken: true,
     },
+    global: {
+      headers: {
+        'x-client-info': 'ecobolt-web-app',
+      },
+    },
+    db: {
+      schema: 'public',
+    },
+    realtime: {
+      params: {
+        eventsPerSecond: 10,
+      },
+    },
   }
 );
 
 // Check if Supabase is properly configured
 export const isSupabaseConfigured = () => {
-  return !!(supabaseUrl && supabaseAnonKey && 
+  const configured = !!(supabaseUrl && supabaseAnonKey && 
     supabaseUrl !== 'https://placeholder.supabase.co' && 
     supabaseAnonKey !== 'placeholder-key');
+  
+  console.log('🔧 Supabase Configuration Check:', {
+    hasUrl: !!supabaseUrl,
+    hasKey: !!supabaseAnonKey,
+    isConfigured: configured,
+    url: supabaseUrl ? supabaseUrl.substring(0, 30) + '...' : 'missing'
+  });
+  
+  return configured;
 };
 
 // Database types

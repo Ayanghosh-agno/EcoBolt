@@ -9,6 +9,25 @@ export class SupabaseAPI {
     }
   }
 
+  // Test Supabase connection
+  private async testConnection() {
+    try {
+      console.log('🔗 SupabaseAPI: Testing Supabase connection...');
+      const { data, error } = await supabase.from('user_profiles').select('count').limit(1);
+      
+      if (error) {
+        console.error('❌ SupabaseAPI: Connection test failed:', error);
+        return false;
+      }
+      
+      console.log('✅ SupabaseAPI: Connection test successful');
+      return true;
+    } catch (error) {
+      console.error('❌ SupabaseAPI: Connection test error:', error);
+      return false;
+    }
+  }
+
   // Authentication
   async signUp(email: string, password: string, fullName: string) {
     this.checkConfiguration();
@@ -75,15 +94,47 @@ export class SupabaseAPI {
     try {
       console.log('👤 SupabaseAPI: Getting current user with provided ID:', userId);
       
+      // Test connection first
+      const connectionOk = await this.testConnection();
+      if (!connectionOk) {
+        console.error('❌ SupabaseAPI: Connection test failed, cannot fetch profile');
+        
+        // Return basic user info if we have it
+        if (userId && userEmail) {
+          return {
+            id: userId,
+            email: userEmail,
+            name: userMetadata?.full_name || 'User',
+            phone: '',
+            farmName: '',
+            location: '',
+          };
+        }
+        return null;
+      }
+      
       // If userId is provided, use it directly instead of making auth calls
       if (userId && userEmail) {
         console.log('📋 SupabaseAPI: Using provided user data, fetching profile...');
         
         try {
-          const { data, error } = await supabase
+          console.log('🔍 SupabaseAPI: Making profile query for user:', userId);
+          
+          // Add timeout to the query
+          const profilePromise = supabase
             .from('user_profiles')
             .select('*')
             .eq('id', userId);
+
+          // Create a timeout promise
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Profile query timeout')), 10000);
+          });
+
+          // Race between the query and timeout
+          const { data, error } = await Promise.race([profilePromise, timeoutPromise]) as any;
+
+          console.log('📋 SupabaseAPI: Profile query completed');
 
           if (error) {
             console.error('⚠️ SupabaseAPI: Error fetching user profile:', error);
