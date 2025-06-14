@@ -11,7 +11,8 @@ import {
   CheckCircle,
   Loader2,
   RefreshCw,
-  Zap
+  Zap,
+  Cloud
 } from 'lucide-react';
 import { SensorData } from '../../types';
 import { watsonxApi } from '../../services/watsonxApi';
@@ -38,6 +39,7 @@ const AIRecommendations: React.FC<AIRecommendationsProps> = ({ sensorData }) => 
   const [isConfigured, setIsConfigured] = useState(false);
   const [configStatus, setConfigStatus] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [source, setSource] = useState<'watsonx' | 'fallback' | null>(null);
 
   useEffect(() => {
     // Check WatsonX configuration on component mount
@@ -66,139 +68,31 @@ const AIRecommendations: React.FC<AIRecommendationsProps> = ({ sensorData }) => 
       
       console.log('🤖 AIRecommendations: Fetching AI recommendations...');
       
-      if (isConfigured) {
-        // Use real WatsonX API
-        const recs = await watsonxApi.getRecommendations(sensorData);
-        setRecommendations(recs);
-        console.log(`✅ AIRecommendations: Received ${recs.length} recommendations from WatsonX`);
+      // Always use the edge function approach (which handles both WatsonX and fallback)
+      const recs = await watsonxApi.getRecommendations(sensorData);
+      setRecommendations(recs);
+      
+      // Determine source based on configuration and results
+      if (isConfigured && recs.length > 0) {
+        setSource('watsonx');
+        console.log(`✅ AIRecommendations: Received ${recs.length} recommendations via edge function`);
       } else {
-        // Use fallback recommendations
-        console.log('⚠️ AIRecommendations: WatsonX not configured, using fallback recommendations');
-        const fallbackRecs = generateFallbackRecommendations(sensorData);
-        setRecommendations(fallbackRecs);
+        setSource('fallback');
+        console.log(`⚠️ AIRecommendations: Using fallback recommendations (${recs.length} items)`);
       }
       
       setHasLoadedOnce(true);
     } catch (error) {
       console.error('❌ AIRecommendations: Error fetching recommendations:', error);
       setError('Failed to generate AI recommendations');
+      setSource('fallback');
       
-      // Use fallback recommendations on error
-      const fallbackRecs = generateFallbackRecommendations(sensorData);
-      setRecommendations(fallbackRecs);
+      // Set empty recommendations on error
+      setRecommendations([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
-
-  // Generate fallback recommendations when WatsonX is not available
-  const generateFallbackRecommendations = (data: SensorData): AIRecommendation[] => {
-    const recs: AIRecommendation[] = [];
-
-    // Best Farming Practice Recommendation
-    if (data.moisture < 40) {
-      recs.push({
-        type: 'practice',
-        title: 'Implement Drip Irrigation',
-        description: 'Current soil moisture is below optimal levels. Drip irrigation can improve water efficiency by 30-50%.',
-        confidence: 92,
-        priority: 'high',
-        actionable: true,
-        reasoning: `Soil moisture at ${data.moisture}% is below the optimal range of 40-60% for most crops.`
-      });
-    }
-
-    if (data.ph < 6.0 || data.ph > 7.5) {
-      recs.push({
-        type: 'practice',
-        title: 'Soil pH Adjustment',
-        description: data.ph < 6.0 ? 'Apply lime to increase soil pH' : 'Apply sulfur to decrease soil pH',
-        confidence: 88,
-        priority: 'medium',
-        actionable: true,
-        reasoning: `Current pH of ${data.ph} is outside the optimal range of 6.0-7.5 for nutrient availability.`
-      });
-    }
-
-    // Best Fertilizer Recommendation
-    if (data.n < 30) {
-      recs.push({
-        type: 'fertilizer',
-        title: 'Nitrogen-Rich Fertilizer',
-        description: 'Apply 20-10-10 NPK fertilizer at 150kg/hectare to boost nitrogen levels.',
-        confidence: 85,
-        priority: 'high',
-        actionable: true,
-        reasoning: `Nitrogen levels at ${data.n}ppm are below optimal range of 30-50ppm.`
-      });
-    }
-
-    if (data.p < 15) {
-      recs.push({
-        type: 'fertilizer',
-        title: 'Phosphorus Supplement',
-        description: 'Consider bone meal or rock phosphate application to improve phosphorus availability.',
-        confidence: 78,
-        priority: 'medium',
-        actionable: true,
-        reasoning: `Phosphorus at ${data.p}ppm is below recommended 15-25ppm range.`
-      });
-    }
-
-    // Best Crop Recommendation
-    const tempRange = data.atmoTemp;
-    const moistureLevel = data.moisture;
-    
-    if (tempRange >= 20 && tempRange <= 30 && moistureLevel >= 40) {
-      recs.push({
-        type: 'crop',
-        title: 'Tomatoes - Optimal Conditions',
-        description: 'Current conditions are ideal for tomato cultivation. Expected yield: 40-60 tons/hectare.',
-        confidence: 94,
-        priority: 'high',
-        actionable: true,
-        reasoning: `Temperature (${tempRange}°C) and moisture (${moistureLevel}%) are in optimal ranges for tomatoes.`
-      });
-    } else if (tempRange >= 15 && tempRange <= 25) {
-      recs.push({
-        type: 'crop',
-        title: 'Lettuce - Good Match',
-        description: 'Cool-season crop suitable for current temperature conditions. Consider succession planting.',
-        confidence: 82,
-        priority: 'medium',
-        actionable: true,
-        reasoning: `Moderate temperatures (${tempRange}°C) favor cool-season crops like lettuce.`
-      });
-    }
-
-    // AI Insights
-    const lightLevel = data.light;
-    if (lightLevel < 300) {
-      recs.push({
-        type: 'insight',
-        title: 'Light Supplementation Needed',
-        description: 'Consider LED grow lights during cloudy periods to maintain photosynthesis rates.',
-        confidence: 76,
-        priority: 'medium',
-        actionable: true,
-        reasoning: `Light intensity at ${lightLevel} lux is below optimal 400-800 lux range.`
-      });
-    }
-
-    if (data.ec > 2.5) {
-      recs.push({
-        type: 'insight',
-        title: 'Salt Stress Warning',
-        description: 'High electrical conductivity indicates salt buildup. Flush soil with clean water.',
-        confidence: 90,
-        priority: 'high',
-        actionable: true,
-        reasoning: `EC level of ${data.ec} dS/m exceeds safe threshold of 2.0 dS/m.`
-      });
-    }
-
-    return recs;
   };
 
   useEffect(() => {
@@ -293,15 +187,20 @@ const AIRecommendations: React.FC<AIRecommendationsProps> = ({ sensorData }) => 
           <div>
             <h2 className="text-base sm:text-lg font-semibold text-gray-900">WatsonX AI Recommendations</h2>
             <div className="flex items-center space-x-2 mt-1">
-              {isConfigured ? (
+              {source === 'watsonx' ? (
                 <>
                   <Zap className="h-3 w-3 text-indigo-500" />
                   <span className="text-xs text-indigo-600 font-medium">WatsonX AI Powered</span>
                 </>
+              ) : source === 'fallback' ? (
+                <>
+                  <Cloud className="h-3 w-3 text-yellow-500" />
+                  <span className="text-xs text-yellow-600 font-medium">Fallback Mode</span>
+                </>
               ) : (
                 <>
-                  <AlertCircle className="h-3 w-3 text-yellow-500" />
-                  <span className="text-xs text-yellow-600 font-medium">Fallback Mode</span>
+                  <AlertCircle className="h-3 w-3 text-gray-500" />
+                  <span className="text-xs text-gray-600 font-medium">Ready</span>
                 </>
               )}
             </div>
@@ -323,10 +222,10 @@ const AIRecommendations: React.FC<AIRecommendationsProps> = ({ sensorData }) => 
         <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
           <div className="flex items-center mb-2">
             <AlertCircle className="h-4 w-4 text-yellow-600 mr-2" />
-            <span className="text-sm font-medium text-yellow-800">WatsonX AI Not Configured</span>
+            <span className="text-sm font-medium text-yellow-800">Supabase Configuration Required</span>
           </div>
           <div className="text-xs text-yellow-700">
-            Using fallback recommendation system. Configure WatsonX API key and project ID for enhanced AI insights.
+            Configure Supabase URL and API key to enable WatsonX AI recommendations via edge function.
           </div>
         </div>
       )}
@@ -391,7 +290,7 @@ const AIRecommendations: React.FC<AIRecommendationsProps> = ({ sensorData }) => 
                       </div>
                       
                       <div className="flex items-center space-x-1">
-                        {isConfigured ? (
+                        {source === 'watsonx' ? (
                           <>
                             <Zap className="h-3 w-3 text-indigo-500" />
                             <span className="text-xs text-indigo-600 font-medium">WatsonX AI</span>
@@ -415,9 +314,9 @@ const AIRecommendations: React.FC<AIRecommendationsProps> = ({ sensorData }) => 
       <div className="mt-4 sm:mt-6 pt-3 sm:pt-4 border-t border-gray-200">
         <div className="flex items-center justify-between text-xs text-gray-500">
           <div className="flex items-center space-x-2">
-            <div className={`w-2 h-2 rounded-full ${isConfigured ? 'bg-indigo-400 animate-pulse' : 'bg-yellow-400'}`}></div>
+            <div className={`w-2 h-2 rounded-full ${source === 'watsonx' ? 'bg-indigo-400 animate-pulse' : 'bg-yellow-400'}`}></div>
             <span>
-              {isConfigured ? 'Powered by IBM WatsonX AI' : 'Fallback recommendation system'}
+              {source === 'watsonx' ? 'Powered by IBM WatsonX AI' : 'Fallback recommendation system'}
             </span>
           </div>
           <span>
