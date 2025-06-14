@@ -57,10 +57,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
         console.log('🔍 AuthProvider: Getting initial session...');
         
-        // Add timeout to session check
+        // Add timeout to session check - increased from 5000 to 10000
         const sessionPromise = supabase.auth.getSession();
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Session check timeout')), 5000)
+          setTimeout(() => reject(new Error('Session check timeout')), 10000)
         );
         
         const { data: { session }, error } = await Promise.race([sessionPromise, timeoutPromise]) as any;
@@ -78,10 +78,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (session?.user && mounted) {
           console.log('👤 AuthProvider: Getting user profile...');
           try {
-            // Add timeout to getCurrentUser call
+            // Add timeout to getCurrentUser call - increased from 8000 to 15000
             const userPromise = supabaseApi.getCurrentUser();
             const userTimeoutPromise = new Promise<User | null>((_, reject) => 
-              setTimeout(() => reject(new Error('Get user timeout')), 8000)
+              setTimeout(() => reject(new Error('Get user timeout')), 15000)
             );
             
             const currentUser = await Promise.race([userPromise, userTimeoutPromise]);
@@ -142,10 +142,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           if (event === 'SIGNED_IN' && session?.user) {
             console.log('✅ AuthProvider: User signed in, getting profile...');
             try {
-              // Add timeout to getCurrentUser call in auth listener
+              // Add timeout to getCurrentUser call in auth listener - increased from 8000 to 15000
               const userPromise = supabaseApi.getCurrentUser();
               const userTimeoutPromise = new Promise<User | null>((_, reject) => 
-                setTimeout(() => reject(new Error('Get user timeout in auth listener')), 8000)
+                setTimeout(() => reject(new Error('Get user timeout in auth listener')), 15000)
               );
               
               const currentUser = await Promise.race([userPromise, userTimeoutPromise]);

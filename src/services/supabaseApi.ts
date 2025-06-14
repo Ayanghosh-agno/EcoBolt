@@ -9,8 +9,8 @@ export class SupabaseAPI {
     }
   }
 
-  // Add timeout wrapper for async operations
-  private async withTimeout<T>(promise: Promise<T>, timeoutMs: number = 5000): Promise<T> {
+  // Add timeout wrapper for async operations - increased default from 5000 to 10000
+  private async withTimeout<T>(promise: Promise<T>, timeoutMs: number = 10000): Promise<T> {
     return Promise.race([
       promise,
       new Promise<T>((_, reject) => 
@@ -93,7 +93,7 @@ export class SupabaseAPI {
       
       const { data: { user } } = await this.withTimeout(
         supabase.auth.getUser(),
-        3000 // 3 second timeout
+        10000 // increased from 3000 to 10000
       );
       
       console.log('👤 SupabaseAPI: Auth user result:', user?.id ? 'Found' : 'Not found');
@@ -105,14 +105,14 @@ export class SupabaseAPI {
 
       console.log('📋 SupabaseAPI: Fetching user profile...');
       
-      // Try to get user profile with timeout
+      // Try to get user profile with timeout - increased from 3000 to 10000
       const { data: profile, error } = await this.withTimeout(
         supabase
           .from('user_profiles')
           .select('*')
           .eq('id', user.id)
           .single(),
-        3000 // 3 second timeout
+        10000
       );
 
       if (error && error.code !== 'PGRST116') {
