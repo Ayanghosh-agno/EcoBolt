@@ -85,6 +85,14 @@ export class SupabaseAPI {
             .select('*')
             .eq('id', userId);
 
+          
+      let query = supabase
+            .from('user_profiles')
+            .select('*')
+            .eq('id', userId);
+
+      const { data, error } = await query;
+          
           if (error && error.code !== 'PGRST116') {
             console.error('⚠️ SupabaseAPI: Error fetching user profile:', error);
           }
