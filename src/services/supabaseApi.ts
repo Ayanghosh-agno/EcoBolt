@@ -411,6 +411,110 @@ export class SupabaseAPI {
     }
   }
 
+  // Helper function to aggregate sensor data by time period
+  private aggregateSensorData(data: any[], timeRange: '24h' | '7d' | '30d'): SensorData[] {
+    if (!data || data.length === 0) return [];
+
+    console.log(`📊 SupabaseAPI: Aggregating ${data.length} sensor records for ${timeRange}`);
+
+    // For 24h, return hourly data (no aggregation needed if data is already hourly)
+    if (timeRange === '24h') {
+      console.log('📊 SupabaseAPI: Using raw data for 24h view');
+      return data.map(item => this.transformSensorData(item));
+    }
+
+    // For 7d and 30d, we need to aggregate by day
+    const aggregatedData = new Map<string, any[]>();
+
+    // Group data by date
+    data.forEach(item => {
+      const date = new Date(item.timestamp);
+      const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD format
+      
+      if (!aggregatedData.has(dateKey)) {
+        aggregatedData.set(dateKey, []);
+      }
+      aggregatedData.get(dateKey)!.push(item);
+    });
+
+    console.log(`📊 SupabaseAPI: Grouped data into ${aggregatedData.size} unique dates`);
+
+    // Calculate averages for each date
+    const result: SensorData[] = [];
+    
+    for (const [dateKey, dayData] of aggregatedData.entries()) {
+      const avgData = this.calculateAverages(dayData);
+      
+      // Set timestamp to noon of that date for consistent display
+      const timestamp = new Date(dateKey + 'T12:00:00.000Z');
+      
+      result.push({
+        timestamp: timestamp.toISOString(),
+        atmoTemp: avgData.atmo_temp,
+        humidity: avgData.humidity,
+        light: avgData.light,
+        ec: avgData.ec,
+        soilTemp: avgData.soil_temp,
+        moisture: avgData.moisture,
+        n: avgData.nitrogen,
+        p: avgData.phosphorus,
+        k: avgData.potassium,
+        ph: avgData.ph,
+      });
+    }
+
+    // Sort by timestamp
+    result.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    console.log(`📊 SupabaseAPI: Aggregated to ${result.length} daily averages`);
+    return result;
+  }
+
+  // Helper function to calculate averages for sensor parameters
+  private calculateAverages(data: any[]): any {
+    const count = data.length;
+    const sums = {
+      atmo_temp: 0,
+      humidity: 0,
+      light: 0,
+      ec: 0,
+      soil_temp: 0,
+      moisture: 0,
+      nitrogen: 0,
+      phosphorus: 0,
+      potassium: 0,
+      ph: 0,
+    };
+
+    // Sum all values
+    data.forEach(item => {
+      sums.atmo_temp += item.atmo_temp || 0;
+      sums.humidity += item.humidity || 0;
+      sums.light += item.light || 0;
+      sums.ec += item.ec || 0;
+      sums.soil_temp += item.soil_temp || 0;
+      sums.moisture += item.moisture || 0;
+      sums.nitrogen += item.nitrogen || 0;
+      sums.phosphorus += item.phosphorus || 0;
+      sums.potassium += item.potassium || 0;
+      sums.ph += item.ph || 0;
+    });
+
+    // Calculate averages and round to 2 decimal places
+    return {
+      atmo_temp: Math.round((sums.atmo_temp / count) * 100) / 100,
+      humidity: Math.round((sums.humidity / count) * 100) / 100,
+      light: Math.round(sums.light / count),
+      ec: Math.round((sums.ec / count) * 100) / 100,
+      soil_temp: Math.round((sums.soil_temp / count) * 100) / 100,
+      moisture: Math.round((sums.moisture / count) * 100) / 100,
+      nitrogen: Math.round((sums.nitrogen / count) * 100) / 100,
+      phosphorus: Math.round((sums.phosphorus / count) * 100) / 100,
+      potassium: Math.round((sums.potassium / count) * 100) / 100,
+      ph: Math.round((sums.ph / count) * 100) / 100,
+    };
+  }
+
   async getSensorDataHistory(timeRange: '24h' | '7d' | '30d', deviceId?: string): Promise<SensorData[]> {
     if (!isSupabaseConfigured()) {
       console.log('🔧 SupabaseAPI: Not configured, returning empty sensor history');
@@ -418,7 +522,7 @@ export class SupabaseAPI {
     }
     
     try {
-      console.log('📊 SupabaseAPI: Fetching sensor data history...');
+      console.log(`📊 SupabaseAPI: Fetching sensor data history for ${timeRange}...`);
       
       const now = new Date();
       let startTime: Date;
@@ -434,6 +538,8 @@ export class SupabaseAPI {
           startTime = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
           break;
       }
+
+      console.log(`📊 SupabaseAPI: Querying data from ${startTime.toISOString()} to ${now.toISOString()}`);
 
       let query = supabase
         .from('sensor_data')
@@ -452,8 +558,13 @@ export class SupabaseAPI {
         return [];
       }
 
-      console.log('✅ SupabaseAPI: Sensor history fetched:', data?.length || 0, 'records');
-      return (data || []).map(item => this.transformSensorData(item));
+      console.log(`✅ SupabaseAPI: Raw sensor history fetched: ${data?.length || 0} records`);
+
+      // Aggregate the data based on time range
+      const aggregatedData = this.aggregateSensorData(data || [], timeRange);
+      
+      console.log(`✅ SupabaseAPI: Final aggregated data: ${aggregatedData.length} data points`);
+      return aggregatedData;
     } catch (error) {
       console.error('❌ SupabaseAPI: Error in getSensorDataHistory:', error);
       return [];
