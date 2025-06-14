@@ -9,18 +9,54 @@ export class SupabaseAPI {
     }
   }
 
+  // Debug function to test raw Supabase client
+  private async debugSupabaseClient() {
+    console.log('🔍 SupabaseAPI: Debugging Supabase client...');
+    
+    try {
+      // Test 1: Check if client exists
+      console.log('🔍 SupabaseAPI: Client exists:', !!supabase);
+      console.log('🔍 SupabaseAPI: Client auth exists:', !!supabase.auth);
+      console.log('🔍 SupabaseAPI: Client from exists:', !!supabase.from);
+      
+      // Test 2: Try a simple operation that should always work
+      console.log('🔍 SupabaseAPI: Testing basic client functionality...');
+      
+      // This should work even without authentication
+      const testPromise = supabase.auth.getSession();
+      console.log('🔍 SupabaseAPI: getSession promise created:', !!testPromise);
+      
+      // Add promise state logging
+      testPromise.then(
+        (result) => console.log('✅ SupabaseAPI: getSession resolved:', !!result),
+        (error) => console.log('❌ SupabaseAPI: getSession rejected:', error)
+      );
+      
+      return testPromise;
+      
+    } catch (error) {
+      console.error('❌ SupabaseAPI: Error in debugSupabaseClient:', error);
+      throw error;
+    }
+  }
+
   // Simple connection test that doesn't rely on specific tables
   private async testConnection() {
     try {
       console.log('🔗 SupabaseAPI: Testing Supabase connection...');
+      
+      // First debug the client
+      await this.debugSupabaseClient();
       
       // Use a simple auth check instead of table query
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('Connection timeout')), 5000);
       });
       
+      console.log('🔗 SupabaseAPI: Creating connection promise...');
       const connectionPromise = supabase.auth.getSession();
       
+      console.log('🔗 SupabaseAPI: Racing promises...');
       await Promise.race([connectionPromise, timeoutPromise]);
       
       console.log('✅ SupabaseAPI: Connection test successful');
@@ -102,24 +138,38 @@ export class SupabaseAPI {
         console.log('📋 SupabaseAPI: Using provided user data, attempting profile fetch...');
         
         try {
-          console.log('🔍 SupabaseAPI: Making profile query for user:', userId);
+          console.log('🔍 SupabaseAPI: Creating profile query for user:', userId);
           
-          // Create a very short timeout for the profile query
-          const profilePromise = supabase
+          // Create the query but don't await it yet
+          const profileQuery = supabase
             .from('user_profiles')
             .select('*')
             .eq('id', userId)
             .limit(1);
+          
+          console.log('🔍 SupabaseAPI: Profile query created:', !!profileQuery);
+          
+          // Log promise state
+          profileQuery.then(
+            (result) => console.log('✅ SupabaseAPI: Profile query resolved with data:', !!result.data),
+            (error) => console.log('❌ SupabaseAPI: Profile query rejected:', error)
+          );
 
+          // Create a very short timeout for the profile query
           const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Profile query timeout after 3 seconds')), 3000);
+            setTimeout(() => {
+              console.log('⏰ SupabaseAPI: Profile query timeout triggered');
+              reject(new Error('Profile query timeout after 3 seconds'));
+            }, 3000);
           });
 
+          console.log('🏁 SupabaseAPI: Starting profile query race...');
+          
           // Race between the query and timeout
-          const result = await Promise.race([profilePromise, timeoutPromise]);
+          const result = await Promise.race([profileQuery, timeoutPromise]);
           const { data, error } = result as any;
 
-          console.log('📋 SupabaseAPI: Profile query completed');
+          console.log('📋 SupabaseAPI: Profile query race completed');
 
           if (error) {
             console.warn('⚠️ SupabaseAPI: Profile query error (using fallback):', error.message);
@@ -141,7 +191,7 @@ export class SupabaseAPI {
           console.log('✅ SupabaseAPI: User data assembled from provided ID:', userData.name);
           return userData;
           
-        } catch (profileError) {
+        } catch (profileError: any) {
           console.warn('⚠️ SupabaseAPI: Profile fetch failed/timeout, using basic user info:', profileError.message);
           
           // Return basic user info if profile fetch fails or times out
@@ -225,7 +275,7 @@ export class SupabaseAPI {
         console.log('✅ SupabaseAPI: User data assembled:', userData.name);
         return userData;
         
-      } catch (profileError) {
+      } catch (profileError: any) {
         console.warn('⚠️ SupabaseAPI: Profile fetch failed/timeout, using basic user info:', profileError.message);
         
         // Return basic user info from session if profile fetch fails
