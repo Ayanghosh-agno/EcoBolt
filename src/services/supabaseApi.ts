@@ -158,12 +158,12 @@ export class SupabaseAPI {
     } catch (error) {
       console.error('❌ SupabaseAPI: Error in getCurrentUser:', error);
       
-      // Final fallback - try to get user from getUser() with very short timeout
+      // Final fallback - try to get user from getUser() with increased timeout
       try {
         console.log('🔄 SupabaseAPI: Attempting final fallback with getUser()...');
         const { data: { user } } = await this.withTimeout(
           supabase.auth.getUser(),
-          3000 // very short timeout
+          10000 // increased timeout from 3000ms to 10000ms
         );
         
         if (user) {
