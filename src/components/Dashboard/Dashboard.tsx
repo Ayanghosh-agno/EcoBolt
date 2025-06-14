@@ -68,11 +68,15 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     const initializeDashboard = async () => {
       try {
+        // Check devices first
         await checkDevices();
+        
+        // Always fetch sensor data (will use mock data if no real data available)
         await fetchSensorData();
       } catch (error) {
         console.error('Error initializing dashboard:', error);
         setError('Failed to initialize dashboard');
+      } finally {
         setLoading(false);
         setCheckingDevices(false);
       }
@@ -90,8 +94,8 @@ const Dashboard: React.FC = () => {
     fetchSensorData();
   };
 
-  // Show error state if there's a critical error
-  if (error && loading) {
+  // Show error state only if there's a critical error AND we're still loading
+  if (error && loading && checkingDevices) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center px-4">
         <div className="text-center max-w-md">
@@ -117,7 +121,8 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  if (checkingDevices || loading) {
+  // Show loading only while checking devices AND loading sensor data
+  if (checkingDevices || (loading && !sensorData)) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center px-4">
         <div className="text-center">

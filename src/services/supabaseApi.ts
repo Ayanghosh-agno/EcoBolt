@@ -26,9 +26,7 @@ export class SupabaseAPI {
     if (error) throw error;
 
     // Create user profile if user was created
-    if (data.user && !data.user.email_confirmed_at) {
-      // For development, we'll create the profile immediately
-      // In production, this would happen after email confirmation
+    if (data.user) {
       try {
         const { error: profileError } = await supabase
           .from('user_profiles')
@@ -37,9 +35,9 @@ export class SupabaseAPI {
             full_name: fullName,
           });
 
-        if (profileError) {
+        if (profileError && profileError.code !== '23505') {
+          // 23505 is unique violation, which means profile already exists
           console.error('Error creating profile:', profileError);
-          // Don't throw here as the user was created successfully
         }
       } catch (profileError) {
         console.error('Error creating user profile:', profileError);
@@ -70,34 +68,37 @@ export class SupabaseAPI {
 
   async getCurrentUser(): Promise<User | null> {
     if (!isSupabaseConfigured()) {
-      // Return null if not configured instead of throwing
       return null;
     }
     
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) return null;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) return null;
 
-    // Try to get user profile
-    const { data: profile, error } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
+      // Try to get user profile
+      const { data: profile, error } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
 
-    if (error && error.code !== 'PGRST116') {
-      // PGRST116 means no rows returned, which is fine for new users
-      console.error('Error fetching user profile:', error);
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching user profile:', error);
+      }
+
+      return {
+        id: user.id,
+        email: user.email!,
+        name: profile?.full_name || user.user_metadata?.full_name || 'User',
+        phone: profile?.phone || '',
+        farmName: profile?.farm_name || '',
+        location: profile?.location || '',
+      };
+    } catch (error) {
+      console.error('Error in getCurrentUser:', error);
+      return null;
     }
-
-    return {
-      id: user.id,
-      email: user.email!,
-      name: profile?.full_name || user.user_metadata?.full_name || '',
-      phone: profile?.phone || '',
-      farmName: profile?.farm_name || '',
-      location: profile?.location || '',
-    };
   }
 
   // Device Management
@@ -106,16 +107,21 @@ export class SupabaseAPI {
       return [];
     }
     
-    const { data, error } = await supabase
-      .from('devices')
-      .select('*')
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('devices')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Error fetching devices:', error);
+      if (error) {
+        console.error('Error fetching devices:', error);
+        return [];
+      }
+      return data || [];
+    } catch (error) {
+      console.error('Error in getUserDevices:', error);
       return [];
     }
-    return data || [];
   }
 
   async addDevice(deviceId: string, deviceName: string, location?: string) {
@@ -170,28 +176,33 @@ export class SupabaseAPI {
       return null;
     }
     
-    let query = supabase
-      .from('sensor_data')
-      .select('*')
-      .order('timestamp', { ascending: false })
-      .limit(1);
+    try {
+      let query = supabase
+        .from('sensor_data')
+        .select('*')
+        .order('timestamp', { ascending: false })
+        .limit(1);
 
-    if (deviceId) {
-      query = query.eq('device_id', deviceId);
-    }
+      if (deviceId) {
+        query = query.eq('device_id', deviceId);
+      }
 
-    const { data, error } = await query;
+      const { data, error } = await query;
 
-    if (error) {
-      console.error('Error fetching sensor data:', error);
+      if (error) {
+        console.error('Error fetching sensor data:', error);
+        return null;
+      }
+
+      if (!data || data.length === 0) {
+        return null;
+      }
+
+      return this.transformSensorData(data[0]);
+    } catch (error) {
+      console.error('Error in getLatestSensorData:', error);
       return null;
     }
-
-    if (!data || data.length === 0) {
-      return null;
-    }
-
-    return this.transformSensorData(data[0]);
   }
 
   async getSensorDataHistory(timeRange: '24h' | '7d' | '30d', deviceId?: string): Promise<SensorData[]> {
@@ -199,39 +210,44 @@ export class SupabaseAPI {
       return [];
     }
     
-    const now = new Date();
-    let startTime: Date;
+    try {
+      const now = new Date();
+      let startTime: Date;
 
-    switch (timeRange) {
-      case '24h':
-        startTime = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-        break;
-      case '7d':
-        startTime = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        break;
-      case '30d':
-        startTime = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        break;
-    }
+      switch (timeRange) {
+        case '24h':
+          startTime = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+          break;
+        case '7d':
+          startTime = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case '30d':
+          startTime = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          break;
+      }
 
-    let query = supabase
-      .from('sensor_data')
-      .select('*')
-      .gte('timestamp', startTime.toISOString())
-      .order('timestamp', { ascending: true });
+      let query = supabase
+        .from('sensor_data')
+        .select('*')
+        .gte('timestamp', startTime.toISOString())
+        .order('timestamp', { ascending: true });
 
-    if (deviceId) {
-      query = query.eq('device_id', deviceId);
-    }
+      if (deviceId) {
+        query = query.eq('device_id', deviceId);
+      }
 
-    const { data, error } = await query;
+      const { data, error } = await query;
 
-    if (error) {
-      console.error('Error fetching sensor history:', error);
+      if (error) {
+        console.error('Error fetching sensor history:', error);
+        return [];
+      }
+
+      return (data || []).map(item => this.transformSensorData(item));
+    } catch (error) {
+      console.error('Error in getSensorDataHistory:', error);
       return [];
     }
-
-    return (data || []).map(item => this.transformSensorData(item));
   }
 
   private transformSensorData(data: any): SensorData {
@@ -256,21 +272,26 @@ export class SupabaseAPI {
       return [];
     }
     
-    let query = supabase
-      .from('thresholds')
-      .select('*')
-      .eq('is_active', true);
+    try {
+      let query = supabase
+        .from('thresholds')
+        .select('*')
+        .eq('is_active', true);
 
-    if (deviceId) {
-      query = query.eq('device_id', deviceId);
-    }
+      if (deviceId) {
+        query = query.eq('device_id', deviceId);
+      }
 
-    const { data, error } = await query;
-    if (error) {
-      console.error('Error fetching thresholds:', error);
+      const { data, error } = await query;
+      if (error) {
+        console.error('Error fetching thresholds:', error);
+        return [];
+      }
+      return data || [];
+    } catch (error) {
+      console.error('Error in getThresholds:', error);
       return [];
     }
-    return data || [];
   }
 
   async updateThreshold(deviceId: string, parameter: string, minValue?: number, maxValue?: number) {
@@ -301,22 +322,27 @@ export class SupabaseAPI {
       return [];
     }
     
-    let query = supabase
-      .from('alerts')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(limit);
+    try {
+      let query = supabase
+        .from('alerts')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limit);
 
-    if (deviceId) {
-      query = query.eq('device_id', deviceId);
-    }
+      if (deviceId) {
+        query = query.eq('device_id', deviceId);
+      }
 
-    const { data, error } = await query;
-    if (error) {
-      console.error('Error fetching alerts:', error);
+      const { data, error } = await query;
+      if (error) {
+        console.error('Error fetching alerts:', error);
+        return [];
+      }
+      return data || [];
+    } catch (error) {
+      console.error('Error in getAlerts:', error);
       return [];
     }
-    return data || [];
   }
 
   // Real-time subscriptions
