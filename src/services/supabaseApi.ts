@@ -96,7 +96,7 @@ export class SupabaseAPI {
         console.log('📋 SupabaseAPI: Using provided user data, fetching profile...');
         
         try {
-          const { data: profile, error } = await this.withTimeout(
+          const { data: profileData, error } = await this.withTimeout(
             supabase
               .from('user_profiles')
               .select('*')
@@ -107,6 +107,10 @@ export class SupabaseAPI {
           if (error && error.code !== 'PGRST116') {
             console.error('⚠️ SupabaseAPI: Error fetching user profile:', error);
           }
+
+          // Extract the first profile from the array (since we're not using .single())
+          const profile = profileData && profileData.length > 0 ? profileData[0] : null;
+          console.log('📋 SupabaseAPI: Profile extracted:', profile ? 'found' : 'not found');
 
           const userData = {
             id: userId,
