@@ -44,7 +44,7 @@ class BoltIoTAPI {
       
       return {
         success,
-        message: success ? `Pin ${pin} set to ${state}` : 'Failed to control pin'
+        message: success ? `Pin ${pin} set to ${state}` : data.value
       };
 
     } catch (error) {
