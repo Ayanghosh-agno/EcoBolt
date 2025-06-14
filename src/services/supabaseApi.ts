@@ -96,7 +96,7 @@ export class SupabaseAPI {
         console.log('📋 SupabaseAPI: Using provided user data, fetching profile...');
         
         try {
-          const { data: profileData, error } = await this.withTimeout(
+          const { data, error } = await this.withTimeout(
             supabase
               .from('user_profiles')
               .select('*')
@@ -175,6 +175,8 @@ export class SupabaseAPI {
             .single(),
           8000
         );
+
+        
 
         if (error && error.code !== 'PGRST116') {
           console.error('⚠️ SupabaseAPI: Error fetching user profile:', error);
