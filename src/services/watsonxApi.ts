@@ -18,7 +18,7 @@ class WatsonXAPI {
   constructor() {
     this.supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
     this.supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-    this.edgeFunctionUrl = `${this.supabaseUrl}/functions/v1/watsonx-recommendations`;
+    this.edgeFunctionUrl = `${this.supabaseUrl}/functions/v1/clever-task`;
     
     if (!this.supabaseUrl || !this.supabaseAnonKey) {
       console.warn('⚠️ WatsonX: Supabase configuration missing');
