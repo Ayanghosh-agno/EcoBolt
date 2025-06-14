@@ -80,21 +80,16 @@ export class SupabaseAPI {
         console.log('📋 SupabaseAPI: Using provided user data, fetching profile...');
         
         try {
-          
-
-          
-      let query = supabase
+          const { data, error } = await supabase
             .from('user_profiles')
             .select('*')
             .eq('id', userId);
 
-      const { data, error } = await query;
-          
-          if (error && error.code !== 'PGRST116') {
+          if (error) {
             console.error('⚠️ SupabaseAPI: Error fetching user profile:', error);
           }
 
-          // Extract the first profile from the array (since we're not using .single())
+          // Extract the first profile from the array
           const profile = data && data.length > 0 ? data[0] : null;
           console.log('📋 SupabaseAPI: Profile extracted:', profile ? 'found' : 'not found');
 
@@ -148,17 +143,20 @@ export class SupabaseAPI {
 
       console.log('📋 SupabaseAPI: Fetching user profile...');
       
-      // Try to get user profile without timeout wrapper
+      // Try to get user profile - use array response instead of .single()
       try {
-        const { data: profile, error } = await supabase
+        const { data, error } = await supabase
           .from('user_profiles')
           .select('*')
-          .eq('id', user.id)
-          .single();
+          .eq('id', user.id);
 
-        if (error && error.code !== 'PGRST116') {
+        if (error) {
           console.error('⚠️ SupabaseAPI: Error fetching user profile:', error);
         }
+
+        // Extract the first profile from the array
+        const profile = data && data.length > 0 ? data[0] : null;
+        console.log('📋 SupabaseAPI: Profile found:', profile ? 'yes' : 'no');
 
         const userData = {
           id: user.id,
