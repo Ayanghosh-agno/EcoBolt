@@ -17,6 +17,8 @@ export interface User {
   name: string;
   email: string;
   phone: string;
+  farmName?: string;
+  location?: string;
 }
 
 export interface ApplianceStatus {
@@ -38,6 +40,8 @@ export interface UserSettings {
   name: string;
   email: string;
   phone: string;
+  farmName?: string;
+  location?: string;
 }
 
 export interface WeatherData {
@@ -52,4 +56,40 @@ export interface WeatherData {
   visibility: number;
   uvIndex: number;
   feelsLike: number;
+}
+
+export interface Device {
+  id: string;
+  device_id: string;
+  device_name: string;
+  location: string | null;
+  is_active: boolean;
+  last_seen: string | null;
+  api_key: string;
+  created_at: string;
+}
+
+export interface Threshold {
+  id: string;
+  device_id: string;
+  parameter: string;
+  min_value: number | null;
+  max_value: number | null;
+  alert_email: boolean;
+  alert_sms: boolean;
+  is_active: boolean;
+}
+
+export interface Alert {
+  id: string;
+  device_id: string;
+  parameter: string;
+  current_value: number;
+  threshold_min: number | null;
+  threshold_max: number | null;
+  alert_type: string;
+  message: string;
+  is_sent: boolean;
+  sent_at: string | null;
+  created_at: string;
 }
