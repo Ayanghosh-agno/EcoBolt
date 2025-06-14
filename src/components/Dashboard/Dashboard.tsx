@@ -10,7 +10,8 @@ import {
   Loader2,
   BarChart3,
   Sparkles,
-  Brain
+  Brain,
+  Plus
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import SensorCard from './SensorCard';
@@ -27,6 +28,7 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [hasDevices, setHasDevices] = useState(false);
+  const [checkingDevices, setCheckingDevices] = useState(true);
 
   const fetchSensorData = async () => {
     try {
@@ -47,12 +49,18 @@ const Dashboard: React.FC = () => {
     } catch (error) {
       console.error('Error checking devices:', error);
       setHasDevices(false);
+    } finally {
+      setCheckingDevices(false);
     }
   };
 
   useEffect(() => {
-    checkDevices();
-    fetchSensorData();
+    const initializeDashboard = async () => {
+      await checkDevices();
+      await fetchSensorData();
+    };
+
+    initializeDashboard();
     
     // Set up auto-refresh every 30 seconds
     const interval = setInterval(fetchSensorData, 30000);
@@ -64,7 +72,7 @@ const Dashboard: React.FC = () => {
     fetchSensorData();
   };
 
-  if (loading) {
+  if (checkingDevices || loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center px-4">
         <div className="text-center">
@@ -73,7 +81,9 @@ const Dashboard: React.FC = () => {
             <div className="absolute inset-0 h-16 w-16 border-4 border-emerald-200 rounded-full mx-auto animate-pulse"></div>
           </div>
           <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 mb-2">Loading Dashboard</h2>
-          <p className="text-gray-600 text-sm sm:text-base">Fetching real-time sensor data...</p>
+          <p className="text-gray-600 text-sm sm:text-base">
+            {checkingDevices ? 'Checking your devices...' : 'Fetching real-time sensor data...'}
+          </p>
         </div>
       </div>
     );

@@ -33,8 +33,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Get initial session
     const getInitialSession = async () => {
       try {
-        const currentUser = await supabaseApi.getCurrentUser();
-        setUser(currentUser);
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+          try {
+            const currentUser = await supabaseApi.getCurrentUser();
+            setUser(currentUser);
+          } catch (error) {
+            console.error('Error getting user profile:', error);
+            // If profile doesn't exist, user is still authenticated but needs profile setup
+            setUser({
+              id: session.user.id,
+              email: session.user.email!,
+              name: session.user.user_metadata?.full_name || '',
+              phone: '',
+              farmName: '',
+              location: '',
+            });
+          }
+        }
       } catch (error) {
         console.error('Error getting initial session:', error);
       } finally {
@@ -47,17 +64,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (event === 'SIGNED_IN' && session) {
+        console.log('Auth state changed:', event, session?.user?.id);
+        
+        if (event === 'SIGNED_IN' && session?.user) {
           try {
             const currentUser = await supabaseApi.getCurrentUser();
             setUser(currentUser);
           } catch (error) {
             console.error('Error getting user after sign in:', error);
+            // Fallback to basic user info
+            setUser({
+              id: session.user.id,
+              email: session.user.email!,
+              name: session.user.user_metadata?.full_name || '',
+              phone: '',
+              farmName: '',
+              location: '',
+            });
           }
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
         }
-        setIsLoading(false);
+        
+        if (event !== 'INITIAL_SESSION') {
+          setIsLoading(false);
+        }
       }
     );
 
@@ -65,28 +96,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    setIsLoading(true);
     try {
       await supabaseApi.signIn(email, password);
       return true;
     } catch (error) {
       console.error('Login error:', error);
       return false;
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const register = async (email: string, password: string, fullName: string): Promise<boolean> => {
-    setIsLoading(true);
     try {
       await supabaseApi.signUp(email, password, fullName);
       return true;
     } catch (error) {
       console.error('Registration error:', error);
       return false;
-    } finally {
-      setIsLoading(false);
     }
   };
 

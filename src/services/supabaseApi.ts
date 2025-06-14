@@ -16,16 +16,25 @@ export class SupabaseAPI {
 
     if (error) throw error;
 
-    // Create user profile
-    if (data.user) {
-      const { error: profileError } = await supabase
-        .from('user_profiles')
-        .insert({
-          id: data.user.id,
-          full_name: fullName,
-        });
+    // Create user profile if user was created
+    if (data.user && !data.user.email_confirmed_at) {
+      // For development, we'll create the profile immediately
+      // In production, this would happen after email confirmation
+      try {
+        const { error: profileError } = await supabase
+          .from('user_profiles')
+          .insert({
+            id: data.user.id,
+            full_name: fullName,
+          });
 
-      if (profileError) throw profileError;
+        if (profileError) {
+          console.error('Error creating profile:', profileError);
+          // Don't throw here as the user was created successfully
+        }
+      } catch (profileError) {
+        console.error('Error creating user profile:', profileError);
+      }
     }
 
     return data;
@@ -46,17 +55,22 @@ export class SupabaseAPI {
     if (error) throw error;
   }
 
-  async getCurrentUser() {
+  async getCurrentUser(): Promise<User | null> {
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) return null;
 
-    // Get user profile
-    const { data: profile } = await supabase
+    // Try to get user profile
+    const { data: profile, error } = await supabase
       .from('user_profiles')
       .select('*')
       .eq('id', user.id)
       .single();
+
+    if (error && error.code !== 'PGRST116') {
+      // PGRST116 means no rows returned, which is fine for new users
+      console.error('Error fetching user profile:', error);
+    }
 
     return {
       id: user.id,
@@ -76,7 +90,7 @@ export class SupabaseAPI {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data;
+    return data || [];
   }
 
   async addDevice(deviceId: string, deviceName: string, location?: string) {
@@ -131,14 +145,18 @@ export class SupabaseAPI {
       query = query.eq('device_id', deviceId);
     }
 
-    const { data, error } = await query.single();
+    const { data, error } = await query;
 
     if (error) {
-      if (error.code === 'PGRST116') return null; // No data found
-      throw error;
+      console.error('Error fetching sensor data:', error);
+      return null;
     }
 
-    return this.transformSensorData(data);
+    if (!data || data.length === 0) {
+      return null;
+    }
+
+    return this.transformSensorData(data[0]);
   }
 
   async getSensorDataHistory(timeRange: '24h' | '7d' | '30d', deviceId?: string): Promise<SensorData[]> {
@@ -169,8 +187,12 @@ export class SupabaseAPI {
 
     const { data, error } = await query;
 
-    if (error) throw error;
-    return data.map(item => this.transformSensorData(item));
+    if (error) {
+      console.error('Error fetching sensor history:', error);
+      return [];
+    }
+
+    return (data || []).map(item => this.transformSensorData(item));
   }
 
   private transformSensorData(data: any): SensorData {
@@ -202,7 +224,7 @@ export class SupabaseAPI {
 
     const { data, error } = await query;
     if (error) throw error;
-    return data;
+    return data || [];
   }
 
   async updateThreshold(deviceId: string, parameter: string, minValue?: number, maxValue?: number) {
@@ -239,7 +261,7 @@ export class SupabaseAPI {
 
     const { data, error } = await query;
     if (error) throw error;
-    return data;
+    return data || [];
   }
 
   // Real-time subscriptions
@@ -281,8 +303,10 @@ export class SupabaseAPI {
 
     const { data, error } = await supabase
       .from('user_profiles')
-      .update(updates)
-      .eq('id', user.id)
+      .upsert({
+        id: user.id,
+        ...updates,
+      })
       .select()
       .single();
 
