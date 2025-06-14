@@ -140,14 +140,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             
             try {
               // Pass user data from session to avoid additional auth calls
+              
+              const fallbackUser = {
+                id: session.user.id,
+                email: session.user.email!,
+                name: session.user.user_metadata?.full_name || 'User',
+                phone: '',
+                farmName: '',
+                location: '',
+              };
+              console.log('✅ AuthProvider: Profile loaded after sign in:', currentUser?.name);
+              setUser(fallbackUser);
+              
               const currentUser = await supabaseApi.getCurrentUser(
                 session.user.id,
                 session.user.email!,
                 session.user.user_metadata
-              );
+              );             
               
-              console.log('✅ AuthProvider: Profile loaded after sign in:', currentUser?.name);
-              setUser(currentUser);
             } catch (error) {
               console.error('⚠️ AuthProvider: Error getting user after sign in, using fallback:', error);
               // Fallback to basic user info
