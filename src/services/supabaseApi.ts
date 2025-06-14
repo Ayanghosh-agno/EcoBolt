@@ -82,14 +82,64 @@ export class SupabaseAPI {
     if (error) throw error;
   }
 
-  async getCurrentUser(): Promise<User | null> {
+  async getCurrentUser(userId?: string, userEmail?: string, userMetadata?: any): Promise<User | null> {
     if (!isSupabaseConfigured()) {
       console.log('🔧 SupabaseAPI: Not configured, returning null');
       return null;
     }
     
     try {
-      console.log('👤 SupabaseAPI: Getting current user...');
+      console.log('👤 SupabaseAPI: Getting current user with provided ID:', userId);
+      
+      // If userId is provided, use it directly instead of making auth calls
+      if (userId && userEmail) {
+        console.log('📋 SupabaseAPI: Using provided user data, fetching profile...');
+        
+        try {
+          const { data: profile, error } = await this.withTimeout(
+            supabase
+              .from('user_profiles')
+              .select('*')
+              .eq('id', userId)
+              .single(),
+            8000
+          );
+
+          if (error && error.code !== 'PGRST116') {
+            console.error('⚠️ SupabaseAPI: Error fetching user profile:', error);
+          }
+
+          const userData = {
+            id: userId,
+            email: userEmail,
+            name: profile?.full_name || userMetadata?.full_name || 'User',
+            phone: profile?.phone || '',
+            farmName: profile?.farm_name || '',
+            location: profile?.location || '',
+          };
+
+          console.log('✅ SupabaseAPI: User data assembled from provided ID:', userData.name);
+          return userData;
+          
+        } catch (profileError) {
+          console.error('⚠️ SupabaseAPI: Profile fetch failed, using basic user info:', profileError);
+          
+          // Return basic user info if profile fetch fails
+          const fallbackUser = {
+            id: userId,
+            email: userEmail,
+            name: userMetadata?.full_name || 'User',
+            phone: '',
+            farmName: '',
+            location: '',
+          };
+          console.log('✅ SupabaseAPI: Fallback user created from provided data:', fallbackUser.name);
+          return fallbackUser;
+        }
+      }
+      
+      // Fallback to original method if no userId provided
+      console.log('🔄 SupabaseAPI: No userId provided, falling back to session check...');
       
       // First, try to get the session which is faster and more reliable
       const { data: { session }, error: sessionError } = await this.withTimeout(
@@ -157,31 +207,6 @@ export class SupabaseAPI {
       
     } catch (error) {
       console.error('❌ SupabaseAPI: Error in getCurrentUser:', error);
-      
-      // Final fallback - try to get user from getUser() with increased timeout
-      try {
-        console.log('🔄 SupabaseAPI: Attempting final fallback with getUser()...');
-        const { data: { user } } = await this.withTimeout(
-          supabase.auth.getUser(),
-          10000 // increased timeout from 3000ms to 10000ms
-        );
-        
-        if (user) {
-          const fallbackUser = {
-            id: user.id,
-            email: user.email!,
-            name: user.user_metadata?.full_name || 'User',
-            phone: '',
-            farmName: '',
-            location: '',
-          };
-          console.log('✅ SupabaseAPI: Final fallback user created:', fallbackUser.name);
-          return fallbackUser;
-        }
-      } catch (fallbackError) {
-        console.error('❌ SupabaseAPI: Final fallback also failed:', fallbackError);
-      }
-      
       return null;
     }
   }

@@ -76,15 +76,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.log('📋 AuthProvider: Session data:', session?.user?.id ? 'User found' : 'No user');
         
         if (session?.user && mounted) {
-          console.log('👤 AuthProvider: Getting user profile...');
+          console.log('👤 AuthProvider: Getting user profile with session data...');
           try {
-            // Add timeout to getCurrentUser call - increased from 8000 to 15000
-            const userPromise = supabaseApi.getCurrentUser();
-            const userTimeoutPromise = new Promise<User | null>((_, reject) => 
-              setTimeout(() => reject(new Error('Get user timeout')), 15000)
+            // Pass user data from session to avoid additional auth calls
+            const currentUser = await supabaseApi.getCurrentUser(
+              session.user.id,
+              session.user.email!,
+              session.user.user_metadata
             );
-            
-            const currentUser = await Promise.race([userPromise, userTimeoutPromise]);
             
             if (mounted) {
               console.log('✅ AuthProvider: User profile loaded:', currentUser?.name);
@@ -140,15 +139,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           }
           
           if (event === 'SIGNED_IN' && session?.user) {
-            console.log('✅ AuthProvider: User signed in, getting profile...');
+            console.log('✅ AuthProvider: User signed in, getting profile with session data...');
             try {
-              // Add timeout to getCurrentUser call in auth listener - increased from 8000 to 15000
-              const userPromise = supabaseApi.getCurrentUser();
-              const userTimeoutPromise = new Promise<User | null>((_, reject) => 
-                setTimeout(() => reject(new Error('Get user timeout in auth listener')), 15000)
+              // Pass user data from session to avoid additional auth calls
+              const currentUser = await supabaseApi.getCurrentUser(
+                session.user.id,
+                session.user.email!,
+                session.user.user_metadata
               );
-              
-              const currentUser = await Promise.race([userPromise, userTimeoutPromise]);
               
               console.log('✅ AuthProvider: Profile loaded after sign in:', currentUser?.name);
               setUser(currentUser);
