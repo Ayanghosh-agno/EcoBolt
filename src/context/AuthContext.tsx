@@ -57,13 +57,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
         console.log('🔍 AuthProvider: Getting initial session...');
         
-        // Add timeout to session check - increased from 5000 to 10000
-        const sessionPromise = supabase.auth.getSession();
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Session check timeout')), 10000)
-        );
-        
-        const { data: { session }, error } = await Promise.race([sessionPromise, timeoutPromise]) as any;
+        // Get session without timeout - let it take as long as needed
+        const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
           console.error('❌ AuthProvider: Error getting session:', error);
@@ -88,7 +83,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             if (mounted) {
               console.log('✅ AuthProvider: User profile loaded:', currentUser?.name);
               setUser(currentUser);
-              setIsLoading(false);
             }
           } catch (error) {
             console.error('⚠️ AuthProvider: Error getting user profile, using fallback:', error);
@@ -104,14 +98,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               };
               console.log('✅ AuthProvider: Fallback user set:', fallbackUser.name);
               setUser(fallbackUser);
-              setIsLoading(false);
             }
           }
         } else {
-          console.log('❌ AuthProvider: No session found, setting loading to false');
-          if (mounted) {
-            setIsLoading(false);
-          }
+          console.log('❌ AuthProvider: No session found');
+        }
+        
+        // Always set loading to false after processing session
+        if (mounted) {
+          console.log('✅ AuthProvider: Setting loading to false after session check');
+          setIsLoading(false);
         }
       } catch (error) {
         console.error('❌ AuthProvider: Error in initializeAuth:', error);
@@ -140,6 +136,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           
           if (event === 'SIGNED_IN' && session?.user) {
             console.log('✅ AuthProvider: User signed in, getting profile with session data...');
+            setIsLoading(true); // Set loading while fetching profile
+            
             try {
               // Pass user data from session to avoid additional auth calls
               const currentUser = await supabaseApi.getCurrentUser(
@@ -163,10 +161,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               };
               console.log('✅ AuthProvider: Fallback user set after sign in:', fallbackUser.name);
               setUser(fallbackUser);
+            } finally {
+              // Always set loading to false after handling sign in
+              console.log('✅ AuthProvider: Setting loading to false after sign in');
+              setIsLoading(false);
             }
-            // Always set loading to false after handling sign in
-            console.log('✅ AuthProvider: Setting loading to false after sign in');
-            setIsLoading(false);
           } else if (event === 'SIGNED_OUT') {
             console.log('👋 AuthProvider: User signed out');
             setUser(null);
@@ -175,8 +174,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             console.log('🔄 AuthProvider: Token refreshed');
             // Don't change loading state for token refresh
           } else {
-            console.log('🔄 AuthProvider: Other auth event, setting loading to false');
-            setIsLoading(false);
+            console.log('🔄 AuthProvider: Other auth event:', event);
+            // Only set loading to false if we don't have a user yet
+            if (!user) {
+              console.log('✅ AuthProvider: Setting loading to false for event:', event);
+              setIsLoading(false);
+            }
           }
         }
       );
@@ -196,6 +199,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
       console.log('🔐 AuthProvider: Attempting login...');
+      setIsLoading(true);
+      
       if (!isSupabaseConfigured()) {
         console.log('🔐 AuthProvider: Demo mode login');
         // Demo mode login
@@ -213,6 +218,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       await supabaseApi.signIn(email, password);
       console.log('✅ AuthProvider: Login successful');
+      // Don't set loading to false here - let the auth state change handler do it
       return true;
     } catch (error) {
       console.error('❌ AuthProvider: Login error:', error);
@@ -224,6 +230,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const register = async (email: string, password: string, fullName: string): Promise<boolean> => {
     try {
       console.log('📝 AuthProvider: Attempting registration...');
+      setIsLoading(true);
+      
       if (!isSupabaseConfigured()) {
         console.log('📝 AuthProvider: Demo mode registration');
         // Demo mode registration
@@ -241,6 +249,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       await supabaseApi.signUp(email, password, fullName);
       console.log('✅ AuthProvider: Registration successful');
+      // Don't set loading to false here - let the auth state change handler do it
       return true;
     } catch (error) {
       console.error('❌ AuthProvider: Registration error:', error);
@@ -257,6 +266,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       } else {
         // Demo mode logout
         setUser(null);
+        setIsLoading(false);
       }
       console.log('✅ AuthProvider: Logout successful');
     } catch (error) {
