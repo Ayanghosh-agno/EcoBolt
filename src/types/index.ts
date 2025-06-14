@@ -52,6 +52,8 @@ export interface WeatherData {
   windDirection: number;
   description: string;
   icon: string;
+  iconUrl?: string;
+  iconName?: string;
   location: string;
   visibility: number;
   uvIndex: number;

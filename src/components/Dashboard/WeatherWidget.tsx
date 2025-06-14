@@ -12,7 +12,15 @@ import {
   Loader2,
   Sunrise,
   Sunset,
-  Zap
+  Zap,
+  CloudSun,
+  CloudMoon,
+  CloudDrizzle,
+  CloudSunRain,
+  CloudMoonRain,
+  Snowflake,
+  CloudFog,
+  Moon
 } from 'lucide-react';
 import { WeatherData } from '../../types';
 import { weatherApi } from '../../services/weatherApi';
@@ -20,14 +28,19 @@ import { weatherApi } from '../../services/weatherApi';
 const WeatherWidget: React.FC = () => {
   const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchWeather = async () => {
       try {
+        setError(null);
+        console.log('🌤️ WeatherWidget: Fetching weather data...');
         const data = await weatherApi.getCurrentWeather();
+        console.log('✅ WeatherWidget: Weather data received:', data.location);
         setWeatherData(data);
       } catch (error) {
-        console.error('Error fetching weather:', error);
+        console.error('❌ WeatherWidget: Error fetching weather:', error);
+        setError('Failed to load weather data');
       } finally {
         setLoading(false);
       }
@@ -36,16 +49,32 @@ const WeatherWidget: React.FC = () => {
     fetchWeather();
     
     // Update weather every 10 minutes
-    const interval = setInterval(fetchWeather, 600000);
+    const interval = setInterval(() => {
+      console.log('🔄 WeatherWidget: Auto-refreshing weather data...');
+      fetchWeather();
+    }, 600000);
+    
     return () => clearInterval(interval);
   }, []);
 
-  const getWeatherIcon = (description: string) => {
-    const desc = description.toLowerCase();
-    if (desc.includes('clear') || desc.includes('sun')) return Sun;
-    if (desc.includes('rain') || desc.includes('shower')) return CloudRain;
-    if (desc.includes('cloud')) return Cloud;
-    return Sun;
+  // Get the appropriate Lucide icon component based on weather condition
+  const getWeatherIconComponent = (iconName: string) => {
+    const iconMap: { [key: string]: React.ComponentType<any> } = {
+      'sun': Sun,
+      'moon': Moon,
+      'cloud': Cloud,
+      'cloud-sun': CloudSun,
+      'cloud-moon': CloudMoon,
+      'cloud-drizzle': CloudDrizzle,
+      'cloud-sun-rain': CloudSunRain,
+      'cloud-moon-rain': CloudMoonRain,
+      'cloud-rain': CloudRain,
+      'zap': Zap,
+      'snowflake': Snowflake,
+      'cloud-fog': CloudFog,
+    };
+    
+    return iconMap[iconName] || Cloud;
   };
 
   const getWindDirection = (degrees: number) => {
@@ -78,25 +107,32 @@ const WeatherWidget: React.FC = () => {
           <div className="text-center">
             <Loader2 className="h-10 w-10 sm:h-12 sm:w-12 animate-spin text-white/80 mx-auto mb-4" />
             <p className="text-white/70 font-medium text-sm sm:text-base">Loading weather data...</p>
+            <p className="text-white/50 text-xs sm:text-sm mt-1">Getting your location...</p>
           </div>
         </div>
       </div>
     );
   }
 
-  if (!weatherData) {
+  if (error || !weatherData) {
     return (
       <div className="relative overflow-hidden bg-gradient-to-br from-gray-600 via-gray-700 to-gray-800 rounded-xl sm:rounded-2xl shadow-xl border border-gray-300/20 p-6 sm:p-8">
         <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent"></div>
         <div className="relative text-center">
           <Cloud className="h-12 w-12 sm:h-16 sm:w-16 mx-auto mb-4 text-white/50" />
-          <p className="text-white/70 font-medium text-sm sm:text-base">Weather data unavailable</p>
+          <p className="text-white/70 font-medium text-sm sm:text-base">
+            {error || 'Weather data unavailable'}
+          </p>
+          <p className="text-white/50 text-xs sm:text-sm mt-1">
+            Please check your internet connection
+          </p>
         </div>
       </div>
     );
   }
 
-  const WeatherIcon = getWeatherIcon(weatherData.description);
+  // Get the appropriate weather icon component
+  const WeatherIcon = getWeatherIconComponent(weatherData.iconName || 'cloud');
 
   return (
     <div className="relative overflow-hidden bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 rounded-xl sm:rounded-2xl shadow-xl border border-blue-300/20 p-4 sm:p-6 lg:p-8">
@@ -115,8 +151,23 @@ const WeatherWidget: React.FC = () => {
               <p className="text-blue-100 font-medium text-sm sm:text-base">{weatherData.location}</p>
             </div>
           </div>
+          
           <div className="bg-white/20 backdrop-blur-sm rounded-xl sm:rounded-2xl p-3 sm:p-4 self-start sm:self-auto">
-            <WeatherIcon className="h-10 w-10 sm:h-12 sm:w-12 text-yellow-300 drop-shadow-lg" />
+            {/* Use both OpenWeatherMap icon and Lucide icon */}
+            <div className="flex items-center space-x-2">
+              {weatherData.iconUrl && (
+                <img 
+                  src={weatherData.iconUrl} 
+                  alt={weatherData.description}
+                  className="h-10 w-10 sm:h-12 sm:w-12 drop-shadow-lg"
+                  onError={(e) => {
+                    // Fallback to Lucide icon if image fails to load
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+              )}
+              <WeatherIcon className="h-8 w-8 sm:h-10 sm:w-10 text-yellow-300 drop-shadow-lg" />
+            </div>
           </div>
         </div>
 
@@ -221,7 +272,7 @@ const WeatherWidget: React.FC = () => {
           <div className="flex justify-between items-center text-xs sm:text-sm">
             <div className="flex items-center space-x-2 text-blue-200">
               <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-              <span>Live data</span>
+              <span>Live data from OpenWeatherMap</span>
             </div>
             <span className="text-blue-200">Updated just now</span>
           </div>
