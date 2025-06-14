@@ -94,7 +94,7 @@ export class SupabaseAPI {
       // First, try to get the session which is faster and more reliable
       const { data: { session }, error: sessionError } = await this.withTimeout(
         supabase.auth.getSession(),
-        5000 // shorter timeout for session check
+        10000 // shorter timeout for session check
       );
       
       if (sessionError) {
