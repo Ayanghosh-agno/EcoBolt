@@ -20,11 +20,13 @@ import WeatherWidget from './WeatherWidget';
 import AIRecommendations from './AIRecommendations';
 import { SensorData } from '../../types';
 import { api } from '../../services/api';
+import { supabaseApi } from '../../services/supabaseApi';
 
 const Dashboard: React.FC = () => {
   const [sensorData, setSensorData] = useState<SensorData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [hasDevices, setHasDevices] = useState(false);
 
   const fetchSensorData = async () => {
     try {
@@ -38,7 +40,18 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const checkDevices = async () => {
+    try {
+      const devices = await supabaseApi.getUserDevices();
+      setHasDevices(devices.length > 0);
+    } catch (error) {
+      console.error('Error checking devices:', error);
+      setHasDevices(false);
+    }
+  };
+
   useEffect(() => {
+    checkDevices();
     fetchSensorData();
     
     // Set up auto-refresh every 30 seconds
@@ -61,6 +74,73 @@ const Dashboard: React.FC = () => {
           </div>
           <h2 className="text-xl sm:text-2xl font-semibold text-gray-800 mb-2">Loading Dashboard</h2>
           <p className="text-gray-600 text-sm sm:text-base">Fetching real-time sensor data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show device setup message if no devices are configured
+  if (!hasDevices) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 sm:p-12 text-center">
+            <div className="bg-emerald-100 p-4 rounded-full w-20 h-20 mx-auto mb-6">
+              <Activity className="h-12 w-12 text-emerald-600" />
+            </div>
+            
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-4">
+              Welcome to EcoBolt!
+            </h1>
+            
+            <p className="text-gray-600 text-lg mb-8 max-w-2xl mx-auto">
+              To start monitoring your farm's environmental conditions, you need to add your first IoT device. 
+              Once configured, you'll see real-time sensor data, analytics, and AI-powered recommendations.
+            </p>
+            
+            <div className="space-y-4 sm:space-y-0 sm:space-x-4 sm:flex sm:justify-center">
+              <Link
+                to="/devices"
+                className="inline-flex items-center px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200 text-lg font-medium"
+              >
+                <Plus className="h-5 w-5 mr-2" />
+                Add Your First Device
+              </Link>
+              
+              <button
+                onClick={() => {
+                  setHasDevices(true);
+                  fetchSensorData();
+                }}
+                className="inline-flex items-center px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200 text-lg font-medium"
+              >
+                <BarChart3 className="h-5 w-5 mr-2" />
+                View Demo Data
+              </button>
+            </div>
+            
+            <div className="mt-12 bg-blue-50 border border-blue-200 rounded-xl p-6">
+              <h3 className="text-lg font-semibold text-blue-900 mb-3">Quick Setup Guide</h3>
+              <div className="text-left space-y-2 text-blue-800">
+                <div className="flex items-center">
+                  <span className="bg-blue-200 text-blue-900 rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold mr-3">1</span>
+                  Add your ESP32 device with a unique Device ID
+                </div>
+                <div className="flex items-center">
+                  <span className="bg-blue-200 text-blue-900 rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold mr-3">2</span>
+                  Copy the generated API key for your device
+                </div>
+                <div className="flex items-center">
+                  <span className="bg-blue-200 text-blue-900 rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold mr-3">3</span>
+                  Configure your ESP32 to send data to our endpoint
+                </div>
+                <div className="flex items-center">
+                  <span className="bg-blue-200 text-blue-900 rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold mr-3">4</span>
+                  Start monitoring real-time sensor data!
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );

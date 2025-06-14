@@ -1,12 +1,9 @@
 import { SensorData, LoginCredentials, ApplianceStatus, AlertRequest, UserSettings, User } from '../types';
+import { supabaseApi } from './supabaseApi';
 
-// Mock API service to simulate Salesforce REST API calls
+// Updated API service to work with Supabase
 class EcoBoltAPI {
-  private baseURL = '/services/apexrest/ecobolt';
-  private isAuthenticated = false;
-  private currentUser: User | null = null;
-
-  // Generate mock sensor data
+  // Generate mock sensor data for demo purposes when no real data is available
   private generateMockSensorData(): SensorData {
     return {
       timestamp: new Date().toISOString(),
@@ -57,54 +54,54 @@ class EcoBoltAPI {
   }
 
   async login(credentials: LoginCredentials): Promise<{ success: boolean; user?: User; token?: string }> {
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    // Mock authentication - in real app, this would validate against Salesforce
-    if (credentials.email && credentials.password) {
-      this.isAuthenticated = true;
-      this.currentUser = {
-        id: '1',
-        name: 'John Farmer',
-        email: credentials.email,
-        phone: '+1-555-0123',
-      };
-
+    try {
+      await supabaseApi.signIn(credentials.email, credentials.password);
+      const user = await supabaseApi.getCurrentUser();
+      
       return {
         success: true,
-        user: this.currentUser,
-        token: 'mock-jwt-token',
+        user: user || undefined,
+        token: 'supabase-session-token',
       };
+    } catch (error) {
+      console.error('Login error:', error);
+      return { success: false };
     }
-
-    return { success: false };
   }
 
   async getLatestSensorData(): Promise<SensorData> {
-    if (!this.isAuthenticated) {
-      throw new Error('Not authenticated');
+    try {
+      // Try to get real data from Supabase first
+      const realData = await supabaseApi.getLatestSensorData();
+      if (realData) {
+        return realData;
+      }
+    } catch (error) {
+      console.error('Error fetching real sensor data:', error);
     }
 
-    // Simulate API call delay
+    // Fallback to mock data for demo
     await new Promise(resolve => setTimeout(resolve, 500));
     return this.generateMockSensorData();
   }
 
   async getSensorDataHistory(range: '24h' | '7d' | '30d'): Promise<SensorData[]> {
-    if (!this.isAuthenticated) {
-      throw new Error('Not authenticated');
+    try {
+      // Try to get real data from Supabase first
+      const realData = await supabaseApi.getSensorDataHistory(range);
+      if (realData && realData.length > 0) {
+        return realData;
+      }
+    } catch (error) {
+      console.error('Error fetching real sensor history:', error);
     }
 
-    // Simulate API call delay
+    // Fallback to mock data for demo
     await new Promise(resolve => setTimeout(resolve, 800));
     return this.generateHistoricalData(range);
   }
 
   async controlAppliance(device: string, status: 'ON' | 'OFF'): Promise<{ success: boolean }> {
-    if (!this.isAuthenticated) {
-      throw new Error('Not authenticated');
-    }
-
     // Simulate API call delay
     await new Promise(resolve => setTimeout(resolve, 300));
     
@@ -113,10 +110,6 @@ class EcoBoltAPI {
   }
 
   async sendAlert(alertRequest: AlertRequest): Promise<{ success: boolean }> {
-    if (!this.isAuthenticated) {
-      throw new Error('Not authenticated');
-    }
-
     // Simulate API call delay
     await new Promise(resolve => setTimeout(resolve, 1000));
     
@@ -125,49 +118,38 @@ class EcoBoltAPI {
   }
 
   async updateSettings(settings: UserSettings): Promise<{ success: boolean; user: User }> {
-    if (!this.isAuthenticated) {
-      throw new Error('Not authenticated');
+    try {
+      await supabaseApi.updateProfile({
+        full_name: settings.name,
+        phone: settings.phone,
+        farm_name: settings.farmName,
+        location: settings.location,
+      });
+
+      const user = await supabaseApi.getCurrentUser();
+      return { success: true, user: user! };
+    } catch (error) {
+      console.error('Error updating settings:', error);
+      throw error;
     }
-
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    this.currentUser = {
-      ...this.currentUser!,
-      ...settings,
-    };
-
-    return { success: true, user: this.currentUser };
   }
 
-  // New method for WatsonX AI recommendations
-  async getAIRecommendations(sensorData: SensorData): Promise<any> {
-    if (!this.isAuthenticated) {
-      throw new Error('Not authenticated');
+  async getCurrentUser(): User | null {
+    try {
+      return await supabaseApi.getCurrentUser();
+    } catch (error) {
+      console.error('Error getting current user:', error);
+      return null;
     }
-
-    // Simulate WatsonX API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // In production, this would call:
-    // POST /services/apexrest/ecobolt/ai/recommendations
-    // Body: { sensorData, farmProfile, historicalData }
-    
-    console.log('Fetching WatsonX AI recommendations for sensor data:', sensorData);
-    return { success: true };
-  }
-
-  getCurrentUser(): User | null {
-    return this.currentUser;
   }
 
   logout(): void {
-    this.isAuthenticated = false;
-    this.currentUser = null;
+    supabaseApi.signOut();
   }
 
   isUserAuthenticated(): boolean {
-    return this.isAuthenticated;
+    // This will be handled by the AuthContext with Supabase
+    return false;
   }
 }
 

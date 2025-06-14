@@ -40,6 +40,20 @@ const DeviceManagement: React.FC = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  // Default threshold values for sensor parameters
+  const defaultThresholds = [
+    { parameter: 'atmo_temp', min_value: 15.0, max_value: 35.0 },
+    { parameter: 'humidity', min_value: 40.0, max_value: 80.0 },
+    { parameter: 'moisture', min_value: 30.0, max_value: 70.0 },
+    { parameter: 'ph', min_value: 6.0, max_value: 7.5 },
+    { parameter: 'ec', min_value: 0.5, max_value: 2.0 },
+    { parameter: 'soil_temp', min_value: 18.0, max_value: 30.0 },
+    { parameter: 'nitrogen', min_value: 20.0, max_value: 50.0 },
+    { parameter: 'phosphorus', min_value: 15.0, max_value: 25.0 },
+    { parameter: 'potassium', min_value: 15.0, max_value: 40.0 },
+    { parameter: 'light', min_value: 300.0, max_value: 800.0 },
+  ];
+
   useEffect(() => {
     fetchDevices();
   }, []);
@@ -53,6 +67,25 @@ const DeviceManagement: React.FC = () => {
       setError('Failed to load devices');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const createDefaultThresholds = async (deviceId: string) => {
+    try {
+      // Create default thresholds for all sensor parameters
+      for (const threshold of defaultThresholds) {
+        await supabaseApi.updateThreshold(
+          deviceId,
+          threshold.parameter,
+          threshold.min_value,
+          threshold.max_value
+        );
+      }
+      console.log(`Created default thresholds for device: ${deviceId}`);
+    } catch (error) {
+      console.error('Error creating default thresholds:', error);
+      // Don't throw error here as device creation was successful
+      // Just log the error for debugging
     }
   };
 
@@ -70,12 +103,17 @@ const DeviceManagement: React.FC = () => {
         });
         setSuccess('Device updated successfully');
       } else {
-        await supabaseApi.addDevice(
+        // Add new device
+        const newDevice = await supabaseApi.addDevice(
           formData.device_id,
           formData.device_name,
           formData.location || undefined
         );
-        setSuccess('Device added successfully');
+        
+        // Create default thresholds for the new device
+        await createDefaultThresholds(newDevice.device_id);
+        
+        setSuccess('Device added successfully with default thresholds');
       }
       
       await fetchDevices();
@@ -244,6 +282,22 @@ const DeviceManagement: React.FC = () => {
                 />
               </div>
 
+              {!editingDevice && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h4 className="text-sm font-medium text-blue-900 mb-2">Default Thresholds</h4>
+                  <p className="text-sm text-blue-700">
+                    The following default thresholds will be automatically created for this device:
+                  </p>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-blue-600">
+                    {defaultThresholds.map((threshold) => (
+                      <div key={threshold.parameter}>
+                        <strong>{threshold.parameter}:</strong> {threshold.min_value} - {threshold.max_value}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="flex space-x-3">
                 <button
                   type="submit"
@@ -369,6 +423,47 @@ const DeviceManagement: React.FC = () => {
             })}
           </div>
         )}
+
+        {/* ESP32 Integration Instructions */}
+        <div className="mt-12 bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">ESP32 Integration Instructions</h3>
+          <div className="space-y-4 text-sm text-gray-600">
+            <div>
+              <h4 className="font-medium text-gray-900 mb-2">1. Data Ingestion Endpoint</h4>
+              <div className="bg-gray-50 p-3 rounded border font-mono text-xs">
+                POST https://bwkuykrjycprxlcrzwwz.supabase.co/functions/v1/esp32-data-ingestion
+              </div>
+            </div>
+            
+            <div>
+              <h4 className="font-medium text-gray-900 mb-2">2. Required Headers</h4>
+              <div className="bg-gray-50 p-3 rounded border font-mono text-xs">
+                Content-Type: application/json<br/>
+                Authorization: Bearer {import.meta.env.VITE_SUPABASE_ANON_KEY}
+              </div>
+            </div>
+            
+            <div>
+              <h4 className="font-medium text-gray-900 mb-2">3. Payload Example</h4>
+              <div className="bg-gray-50 p-3 rounded border font-mono text-xs">
+                {`{
+  "device_id": "ESP32_001",
+  "api_key": "your-device-api-key",
+  "atmo_temp": 25.5,
+  "humidity": 65.2,
+  "light": 450,
+  "soil_temp": 22.1,
+  "moisture": 45.8,
+  "ec": 1.2,
+  "ph": 6.8,
+  "nitrogen": 35.0,
+  "phosphorus": 18.5,
+  "potassium": 28.3
+}`}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
