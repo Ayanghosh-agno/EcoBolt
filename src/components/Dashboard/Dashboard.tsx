@@ -19,6 +19,7 @@ import SensorCard from './SensorCard';
 import ApplianceControl from './ApplianceControl';
 import WeatherWidget from './WeatherWidget';
 import AIRecommendations from './AIRecommendations';
+import AlertHistory from './AlertHistory';
 import { SensorData } from '../../types';
 import { api } from '../../services/api';
 import { supabaseApi } from '../../services/supabaseApi';
@@ -398,9 +399,10 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Control Panel - Only Appliance Control */}
-            <div className="grid grid-cols-1 gap-4 sm:gap-6">
+            {/* Control Panel and Alert History */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
               <ApplianceControl />
+              <AlertHistory />
             </div>
           </>
         )}
