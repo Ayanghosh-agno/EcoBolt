@@ -91,6 +91,7 @@ export class SupabaseAPI {
           .insert({
             id: data.user.id,
             full_name: fullName,
+            email: email, // Store email in user_profiles for webhook access
           });
 
         if (profileError && profileError.code !== '23505') {
@@ -191,7 +192,7 @@ export class SupabaseAPI {
 
           const userData = {
             id: userId,
-            email: userEmail,
+            email: profile?.email || userEmail,
             name: profile?.full_name || userMetadata?.full_name || 'User',
             phone: profile?.phone || '',
             farmName: profile?.farm_name || '',
@@ -275,7 +276,7 @@ export class SupabaseAPI {
 
         const userData = {
           id: user.id,
-          email: user.email!,
+          email: profile?.email || user.email!,
           name: profile?.full_name || user.user_metadata?.full_name || 'User',
           phone: profile?.phone || '',
           farmName: profile?.farm_name || '',
@@ -927,7 +928,7 @@ export class SupabaseAPI {
   }
 
   // Profile Management
-  async updateProfile(updates: { full_name?: string; phone?: string; farm_name?: string; location?: string }) {
+  async updateProfile(updates: { full_name?: string; phone?: string; farm_name?: string; location?: string; email?: string }) {
     this.checkConfiguration();
     
     const { data: { user } } = await supabase.auth.getUser();
