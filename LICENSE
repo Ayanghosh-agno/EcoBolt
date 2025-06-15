@@ -1,0 +1,94 @@
+MIT License
+
+Copyright (c) 2025 Ayan Ghosh - EcoBolt Agricultural IoT Monitoring System
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+================================================================================
+                            ADDITIONAL TERMS & NOTICES
+================================================================================
+
+AGRICULTURAL USE DISCLAIMER:
+This software is designed for agricultural monitoring and automation purposes.
+While every effort has been made to ensure accuracy and reliability, users are
+strongly advised to:
+
+1. Verify all sensor readings and AI recommendations with professional 
+   agricultural expertise before making critical farming decisions
+2. Implement proper safety measures when using automated irrigation and 
+   equipment control features
+3. Regularly calibrate sensors and validate system outputs
+4. Maintain backup monitoring systems for critical operations
+
+DATA PRIVACY & COMPLIANCE:
+Users are responsible for ensuring compliance with local data protection laws
+(GDPR, CCPA, etc.) when collecting and processing agricultural and personal data.
+
+THIRD-PARTY SERVICES:
+This software integrates with various third-party services including:
+- Supabase (Database & Authentication)
+- IBM WatsonX AI (Recommendations)
+- OpenWeatherMap (Weather Data)
+- Bolt IoT Cloud (Device Control)
+- Salesforce (Notifications)
+
+Users must comply with the respective terms of service for each integrated
+service and are responsible for any costs associated with their usage.
+
+RESPONSIBLE USE:
+This software is intended to promote sustainable and efficient agricultural
+practices. Users are encouraged to use the system in ways that support
+environmental conservation and responsible farming methods.
+
+ATTRIBUTION (OPTIONAL):
+While not required, attribution to the EcoBolt project and Bolt.new platform
+is appreciated. This helps support the open-source agricultural technology
+community.
+
+Example attribution:
+"Powered by EcoBolt Agricultural IoT Monitoring System - Built with Bolt.new"
+
+COMMUNITY CONTRIBUTIONS:
+Contributions to improve agricultural monitoring capabilities, add support for
+new sensors, or enhance sustainability features are welcomed and encouraged.
+
+================================================================================
+                                  CREDITS
+================================================================================
+
+Built with Bolt.new - The AI-powered full-stack development platform
+https://bolt.new
+
+Special thanks to:
+- Supabase for providing the backend infrastructure
+- IBM WatsonX for AI-powered agricultural insights
+- OpenWeatherMap for weather data services
+- The open-source community for supporting sustainable agriculture technology
+
+For questions, support, or contributions, please visit:
+https://github.com/Ayanghosh-agno/EcoBolt
+
+Contact: ayanghosh974@gmail.com
+LinkedIn: https://www.linkedin.com/in/ayan-ghosh-4743841a1/
+
+================================================================================
+
+This license promotes open innovation in agricultural technology while ensuring
+responsible use and proper attribution to the tools and services that make
+modern IoT agriculture monitoring possible.
