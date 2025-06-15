@@ -1,7 +1,8 @@
 # EcoBolt - Agricultural IoT Monitoring System
 
-<div align="center">
-  <img src="public/black_circle_360x360.png" alt="EcoBolt Logo" width="120" height="120">
+<div align="center">  
+  
+  ![Ecobolt Logo](https://img.shields.io/badge/Ecobolt-Smart%20Agriculture-blue?style=for-the-badge&logo=car&logoColor=white)
   
   **A comprehensive IoT monitoring system for agricultural environments**
   
@@ -10,6 +11,13 @@
   [![TypeScript](https://img.shields.io/badge/TypeScript-5.5.3-blue)](https://www.typescriptlang.org/)
   [![Supabase](https://img.shields.io/badge/Supabase-Backend-green)](https://supabase.com/)
   [![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4.1-blue)](https://tailwindcss.com/)
+
+<a href="https://bolt.new" target="_blank">
+  <img src="./public/black_circle_360x360.png" alt="Built with Bolt.new" width="60" height="60" style="border-radius: 50%;">
+</a>
+
+**🚀 Built completely with [Bolt.new](https://bolt.new) - The AI-powered full-stack development platform**
+
 </div>
 
 ## 🌱 Overview
@@ -148,7 +156,7 @@ The system includes a sophisticated webhook notification system that automatical
 
 1. **Clone the repository**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/Ayanghosh-agno/EcoBolt/
    cd ecobolt-agricultural-iot
    ```
 
@@ -202,10 +210,7 @@ The system includes a sophisticated webhook notification system that automatical
 Connect your sensors to the ESP32 according to your specific sensor requirements. The system supports:
 - DHT22 for temperature and humidity
 - LDR or photodiode for light intensity
-- Soil moisture sensors
-- pH sensors
-- EC sensors
-- NPK sensors
+- Soil NPK sensor
 
 ### **Data Ingestion Endpoint**
 **Endpoint**: `POST /functions/v1/esp32-data-ingestion`
@@ -235,54 +240,8 @@ Authorization: Bearer YOUR_SUPABASE_ANON_KEY
 ```
 
 ### **Arduino Code Example**
-```cpp
-#include <WiFi.h>
-#include <HTTPClient.h>
-#include <ArduinoJson.h>
 
-const char* ssid = "your-wifi-ssid";
-const char* password = "your-wifi-password";
-const char* serverURL = "https://your-project.supabase.co/functions/v1/esp32-data-ingestion";
-const char* apiKey = "your-device-api-key";
-const char* deviceId = "ESP32_001";
 
-void sendSensorData() {
-  if (WiFi.status() == WL_CONNECTED) {
-    HTTPClient http;
-    http.begin(serverURL);
-    http.addHeader("Content-Type", "application/json");
-    http.addHeader("Authorization", "Bearer your-supabase-anon-key");
-    
-    StaticJsonDocument<500> doc;
-    doc["device_id"] = deviceId;
-    doc["api_key"] = apiKey;
-    doc["atmo_temp"] = readTemperature();
-    doc["humidity"] = readHumidity();
-    doc["light"] = readLightIntensity();
-    doc["soil_temp"] = readSoilTemperature();
-    doc["moisture"] = readSoilMoisture();
-    doc["ec"] = readEC();
-    doc["ph"] = readPH();
-    doc["nitrogen"] = readNitrogen();
-    doc["phosphorus"] = readPhosphorus();
-    doc["potassium"] = readPotassium();
-    
-    String jsonString;
-    serializeJson(doc, jsonString);
-    
-    int httpResponseCode = http.POST(jsonString);
-    
-    if (httpResponseCode > 0) {
-      String response = http.getString();
-      Serial.println("Data sent successfully");
-    } else {
-      Serial.println("Error sending data");
-    }
-    
-    http.end();
-  }
-}
-```
 
 ## 🔐 Security Features
 
@@ -378,16 +337,24 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **OpenWeatherMap** - For weather data services
 - **Bolt IoT** - For appliance control capabilities
 
-## 📞 Support
 
-For support, feature requests, or bug reports:
-- Create an issue in the GitHub repository
-- Contact the development team
-- Check the documentation for common solutions
+## 📞 Contact
+
+**Ecobolt Team**
+- 🌐 Website: [EcoBolt](https://fanciful-otter-1e10b8.netlify.app/)
+- 📧 Email: ayanghosh974@gmail.com
+- 💼 LinkedIn: [Ayan Ghosh](https://www.linkedin.com/in/ayan-ghosh-4743841a1/)
 
 ---
 
 <div align="center">
-  <p><strong>Built with ❤️ for sustainable agriculture</strong></p>
-  <p>Powered by <a href="https://bolt.new">Bolt.new</a></p>
+  
+  **Made with ❤️ by Ayan Ghosh for sustainable agriculture**
+<br>
+<a href="https://bolt.new" target="_blank">
+  <img src="./public/black_circle_360x360.png" alt="Built with Bolt.new" width="80" height="80" style="border-radius: 50%; margin: 10px;">
+</a>
+  
+**🚀 Proudly built with [Bolt.new](https://bolt.new) - The future of AI-powered development**
+<br>
 </div>
