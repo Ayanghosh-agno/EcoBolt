@@ -54,7 +54,7 @@ const ApplianceControl: React.FC = () => {
     
     try {
       const newStatus = appliance.status === 'ON' ? 'OFF' : 'ON';
-      const boltState = newStatus === 'ON' ? 'HIGH' : 'LOW';
+      const boltState = newStatus === 'ON' ? 'LOW' : 'HIGH';
       
       console.log(`🔌 ApplianceControl: Toggling ${appliance.name} (pin ${appliance.pin}) to ${boltState}`);
       
