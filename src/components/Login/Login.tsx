@@ -5,8 +5,8 @@ import BoltLogo from '../Layout/BoltLogo';
 
 const Login: React.FC = () => {
   const [isLoginMode, setIsLoginMode] = useState(true);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('ayanghosh974@gmail.com');
+  const [password, setPassword] = useState('Bolt1234');
   const [fullName, setFullName] = useState('');
   const [error, setError] = useState('');
   const { login, register, isLoading } = useAuth();
